@@ -9,7 +9,9 @@ local jpFindTeleport = ns.findTeleport
 -- activity table) and its party. There's no API field for the key level (the
 -- leader types it into the title), so the title is shown verbatim, never parsed.
 
-local JP_W = 260
+-- Wide enough for a cross-realm name in the roster and a leader line like
+-- "Бомжнадх-СвежевательДуш" without it running under the close button.
+local JP_W = 320
 local jpFrame
 local jpTeleport   -- { spellID, name, icon } for this dungeon, or nil
 
@@ -18,9 +20,9 @@ local JP_UNITS = { "player", "party1", "party2", "party3", "party4" }
 -- Roster columns. The header and every row are laid out from these, so the
 -- numbers stay under their own heading whatever the values are.
 local JP_COL = {
-  name  = { x = MP_PAD,       w = 110, justify = "LEFT" },
-  ilvl  = { x = MP_PAD + 110, w = 60,  justify = "CENTER" },
-  score = { x = MP_PAD + 170, w = JP_W - MP_PAD * 2 - 170, justify = "CENTER" },
+  name  = { x = MP_PAD,       w = 150, justify = "LEFT" },
+  ilvl  = { x = MP_PAD + 150, w = 60,  justify = "CENTER" },
+  score = { x = MP_PAD + 210, w = JP_W - MP_PAD * 2 - 210, justify = "CENTER" },
 }
 
 local jpIlvlCache = {}  -- unit guid -> item level, from a completed inspect
@@ -146,8 +148,11 @@ local function jpRenderParty(f)
       -- The client only volunteers a score for someone it has data for, which
       -- usually means nobody but you until the group gathers. The listing's
       -- leader score is the one exception, so fall back to it for that row.
+      -- A zero counts as "nothing known" for the leader: the client reports 0
+      -- for someone it has no rating loaded for, and the listing's own number
+      -- is the better answer whenever we have it.
       local sc = jpScore(unit)
-      if not sc and jpLeader and jpLeader.score and name == jpLeader.name then
+      if (not sc or sc == 0) and jpLeader and jpLeader.score and name == jpLeader.name then
         sc = jpLeader.score
       end
       row.score:SetText(sc and (GOLD .. sc .. ENDC) or (GREY .. "-" .. ENDC))

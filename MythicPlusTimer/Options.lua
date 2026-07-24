@@ -10,6 +10,7 @@ local cfg = ns.cfg
 -- Data-driven from ns.OPTIONS, one checkbox per row under its group heading, via
 -- the modern Settings API. pcall-guarded so an API change just drops the panel.
 
+local ADDON_TITLE = "Mythic+ Timer and Tools"
 local settingsCategory
 
 local function registerOptionsPanel()
@@ -18,11 +19,31 @@ local function registerOptionsPanel()
     and Settings.CreateCheckbox) then return end
   if type(MythicPlusTimerConfig) ~= "table" then MythicPlusTimerConfig = {} end
   pcall(function()
-    local category, layout = Settings.RegisterVerticalLayoutCategory("Mythic+ Timer and Tools")
-    settingsCategory = category
-    -- Handed to the tabbed Settings and Profiles sub-pages (Panel.lua), which
-    -- hang off this same category so they appear under its "+" in the AddOns list.
-    ns.settingsCategory = category
+    -- Clicking the addon's own name should land on the tabbed page, not on a
+    -- second settings screen that looks nothing like it. So that page IS the
+    -- category; the flat searchable list and Profiles hang off it as sub-pages.
+    local panels = type(ns.buildPanels) == "function" and ns.buildPanels() or nil
+    local parent
+    if panels and type(Settings.RegisterCanvasLayoutCategory) == "function" then
+      local okC, c = pcall(Settings.RegisterCanvasLayoutCategory, panels.settings, ADDON_TITLE)
+      if okC then parent = c end
+    end
+
+    -- The flat list keeps Blizzard's own settings search working, which a canvas
+    -- page cannot do, so it stays: as a sub-page when we have a parent to hang
+    -- it on, and as the category itself when this client has no canvas API.
+    local category, layout
+    if parent and type(Settings.RegisterVerticalLayoutSubcategory) == "function" then
+      category, layout = Settings.RegisterVerticalLayoutSubcategory(parent, "All settings")
+    else
+      category, layout = Settings.RegisterVerticalLayoutCategory(ADDON_TITLE)
+      parent = parent or category
+    end
+    settingsCategory = parent
+    ns.settingsCategory = parent
+    if panels and type(Settings.RegisterCanvasLayoutSubcategory) == "function" then
+      pcall(Settings.RegisterCanvasLayoutSubcategory, parent, panels.profiles, "Profiles")
+    end
     -- Section headings interleave with checkboxes as layout initializers.
     local lastGroup
     for _, o in ipairs(ns.OPTIONS) do
@@ -60,7 +81,8 @@ local function registerOptionsPanel()
         end)
       end
     end
-    Settings.RegisterAddOnCategory(category)
+    -- Only the top-level entry is registered; the sub-pages come with it.
+    Settings.RegisterAddOnCategory(parent)
   end)
 end
 

@@ -395,8 +395,33 @@ Enum = {
   SpellBookSpellBank = { Player = 0 },
 }
 
+-- Only the fields the About tab reads. Version is date-shaped, the way the
+-- release job stamps it.
+C_AddOns = {
+  GetAddOnMetadata = function(_, field)
+    local meta = { Version = "2026.7.24", Title = "Mythic+ Timer and Tools" }
+    return meta[field]
+  end,
+}
+
 Settings = {
   VarType = { Boolean = "boolean" },
+  -- The addon's own name in the AddOns list is a canvas page (the tabbed
+  -- settings), with the flat list and Profiles hanging off it.
+  RegisterCanvasLayoutCategory = function(frame, name)
+    Mock.settings.category = name
+    Mock.settings.canvas = { name = name, frame = frame }
+    local cat = { name = name, ID = 1 }
+    cat.GetID = function(self) return self.ID end
+    return cat
+  end,
+  RegisterVerticalLayoutSubcategory = function(_, name)
+    Mock.settings.subcategories = Mock.settings.subcategories or {}
+    table.insert(Mock.settings.subcategories, { name = name })
+    local cat = { name = name, ID = 2 }
+    cat.GetID = function(self) return self.ID end
+    return cat, Settings.__layout
+  end,
   RegisterVerticalLayoutCategory = function(name)
     Mock.settings.category = name
     -- Shaped like the real category object: it carries an ID, and that ID (not

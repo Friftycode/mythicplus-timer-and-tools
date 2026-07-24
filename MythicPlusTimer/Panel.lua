@@ -98,13 +98,54 @@ local function button(parent, label, w, onClick)
   return b
 end
 
-local function editbox(parent, w, multiline)
-  local e = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
-  e:SetSize(w or 200, multiline and 44 or 22)
+-- A framed well, used behind the profile list and behind the multi-line boxes.
+local function well(parent, w, h)
+  local f = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+  f:SetSize(w, h)
+  if f.SetBackdrop then
+    f:SetBackdrop({
+      bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+      edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+      tile = true, tileSize = 16, edgeSize = 12,
+      insets = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    f:SetBackdropColor(0, 0, 0, 0.5)
+    f:SetBackdropBorderColor(0.35, 0.3, 0.2, 0.9)
+  end
+  return f
+end
+
+-- InputBoxTemplate's art is drawn for one line of text. Stretched over a taller
+-- box it spills past the edges, which is what made the export area look broken,
+-- so a multi-line box gets a plain edit box inside a well we draw ourselves.
+local function editbox(parent, w, multiline, height)
+  if not multiline then
+    local e = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+    e:SetSize(w or 200, 22)
+    e:SetAutoFocus(false)
+    e:SetFontObject("ChatFontNormal")
+    e:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    return e
+  end
+  local box = well(parent, w or 200, height or 46)
+  local e = CreateFrame("EditBox", nil, box)
+  e:SetPoint("TOPLEFT", box, "TOPLEFT", 8, -7)
+  e:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -8, 7)
   e:SetAutoFocus(false)
-  e:SetMultiLine(multiline and true or false)
+  e:SetMultiLine(true)
   e:SetFontObject("ChatFontNormal")
+  e:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  -- Callers position the well, not the edit box inside it.
+  e.container = box
   return e
+end
+
+-- Positions a control, or the well around it when it has one.
+local function place(widget, parent, x, y)
+  local w = widget.container or widget
+  w:ClearAllPoints()
+  w:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+  return widget
 end
 
 -- A heading with a hairline under it, used above each block of related rows on
@@ -149,6 +190,86 @@ local function tabButton(parent, text)
   return t
 end
 
+-- ── About ────────────────────────────────────────────────────────────────────
+
+local ABOUT = "About"
+local CURSEFORGE_URL = "https://www.curseforge.com/wow/addons/mythic-timer-and-tools/"
+local GITHUB_URL = "https://github.com/Friftycode/mythicplus-timer-and-tools"
+
+local function addonVersion()
+  local get = C_AddOns and C_AddOns.GetAddOnMetadata
+  if type(get) ~= "function" then return nil end
+  local ok, v = pcall(get, "MythicPlusTimer", "Version")
+  if ok and type(v) == "string" and v ~= "" then return v end
+  return nil
+end
+
+-- Releases are stamped with the date they were cut ("2026.7.24", plus a counter
+-- for a second release the same day), so the version string is also the date it
+-- was last updated. Anything not in that shape gets no date rather than a guess.
+local MONTHS = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" }
+local function versionDate(v)
+  local y, m, d = tostring(v or ""):match("^(%d%d%d%d)%.(%d%d?)%.(%d%d?)")
+  m, d = tonumber(m), tonumber(d)
+  if not (y and m and d) or m < 1 or m > 12 or d < 1 or d > 31 then return nil end
+  return string.format("%d %s %s", d, MONTHS[m], y)
+end
+
+-- A URL you can select and copy. There is no read-only edit box, so typing into
+-- it just puts the address back.
+local function urlBox(parent, url, x, y)
+  local e = editbox(parent, 430)
+  e:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+  e:SetText(url)
+  e:SetCursorPosition(0)
+  e:SetScript("OnTextChanged", function(self)
+    if self:GetText() ~= url then self:SetText(url) end
+  end)
+  e:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
+  return e
+end
+
+local function buildAbout(page)
+  local ver = addonVersion()
+  local when = versionDate(ver)
+
+  heading(page, "This addon", 0, 0, 440)
+  local blurb = page:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  blurb:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -26)
+  blurb:SetWidth(440)
+  blurb:SetJustifyH("LEFT")
+  blurb:SetText(GREY .. "A Mythic+ run timer overlay, plus the smaller tools around a key." .. ENDC)
+
+  page.version = page:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  page.version:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -50)
+  page.version:SetText(GREY .. "Version  " .. ENDC .. WHITE .. (ver or "unknown") .. ENDC)
+
+  page.updated = page:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  page.updated:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -70)
+  page.updated:SetText(when and (GREY .. "Updated  " .. ENDC .. WHITE .. when .. ENDC) or "")
+
+  heading(page, "Links", 0, -106, 440)
+  local cfLabel = page:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  cfLabel:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -132)
+  cfLabel:SetText(GREY .. "CurseForge" .. ENDC)
+  page.curseforge = urlBox(page, CURSEFORGE_URL, 4, -150)
+
+  local ghLabel = page:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  ghLabel:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -182)
+  ghLabel:SetText(GREY .. "GitHub" .. ENDC)
+  page.github = urlBox(page, GITHUB_URL, 4, -200)
+
+  local hint = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  hint:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -232)
+  hint:SetWidth(440)
+  hint:SetJustifyH("LEFT")
+  hint:SetText("Click a link to select it, then copy with Ctrl+C.")
+  return page
+end
+
+-- ── Settings sub-page ────────────────────────────────────────────────────────
+
 local function buildSettings()
   local panel = CreateFrame("Frame")
   panel.name = "Settings"
@@ -185,7 +306,7 @@ local function buildSettings()
   strip:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -16, STRIP_Y - TAB_H)
 
   local x = 16
-  for _, g in ipairs(order) do
+  local function addTab(g)
     local tab = tabButton(panel, g)
     tab:SetPoint("TOPLEFT", panel, "TOPLEFT", x, STRIP_Y)
     tab:SetScript("OnClick", function() select(g) end)
@@ -198,6 +319,12 @@ local function buildSettings()
     page:Hide()
     page.checks = {}
     page.sections = {}
+    panel.pages[g] = page
+    return page
+  end
+
+  for _, g in ipairs(order) do
+    local page = addTab(g)
     local yy, lastSection = 0, nil
     for _, o in ipairs(byGroup[g]) do
       local sec = o.section or g
@@ -215,8 +342,10 @@ local function buildSettings()
       yy = yy - ROW_H
       page.checks[o.key] = cb
     end
-    panel.pages[g] = page
   end
+
+  buildAbout(addTab(ABOUT))
+  order[#order + 1] = ABOUT
 
   panel.refresh = function()
     for _, page in pairs(panel.pages) do
@@ -264,19 +393,8 @@ local function buildProfiles()
   heading(panel, "Move settings between characters", 16, -262, 470)
 
   -- A framed well for the list, so the rows read as one control.
-  local well = CreateFrame("Frame", nil, panel, "BackdropTemplate")
-  well:SetSize(230, 150)
-  well:SetPoint("TOPLEFT", 16, -98)
-  if well.SetBackdrop then
-    well:SetBackdrop({
-      bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-      edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-      tile = true, tileSize = 16, edgeSize = 12,
-      insets = { left = 3, right = 3, top = 3, bottom = 3 },
-    })
-    well:SetBackdropColor(0, 0, 0, 0.45)
-    well:SetBackdropBorderColor(0.35, 0.3, 0.2, 0.9)
-  end
+  local listWell = well(panel, 230, 150)
+  listWell:SetPoint("TOPLEFT", 16, -98)
 
   -- One row per profile, pooled and rebuilt whenever the set changes.
   panel.rows = {}
@@ -286,7 +404,7 @@ local function buildProfiles()
     local active, main = ns.activeProfile(), ns.mainProfile()
     for i, name in ipairs(names) do
       local r = panel.rows[i]
-      if not r then r = profileRow(well); panel.rows[i] = r end
+      if not r then r = profileRow(listWell); panel.rows[i] = r end
       r.profile = name
       local isActive = name == active
       r.label:SetText(isActive and (GOLD .. name .. ENDC) or (WHITE .. name .. ENDC))
@@ -294,7 +412,7 @@ local function buildProfiles()
       paint(r.bg, isActive and { C_GOLD[1], C_GOLD[2], C_GOLD[3], 0.18 } or { 1, 1, 1, 0 })
       r:SetScript("OnClick", function() ns.loadProfile(r.profile) end)
       r:ClearAllPoints()
-      r:SetPoint("TOPLEFT", well, "TOPLEFT", 10, y)
+      r:SetPoint("TOPLEFT", listWell, "TOPLEFT", 10, y)
       r:Show()
       y = y - 24
     end
@@ -315,14 +433,12 @@ local function buildProfiles()
   local exportLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   exportLabel:SetPoint("TOPLEFT", 16, -286)
   exportLabel:SetText(GREY .. "Export this profile - select the text and copy it:" .. ENDC)
-  panel.exportBox = editbox(panel, 470, true)
-  panel.exportBox:SetPoint("TOPLEFT", 16, -304)
+  panel.exportBox = place(editbox(panel, 470, true), panel, 16, -304)
 
   local importLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   importLabel:SetPoint("TOPLEFT", 16, -360)
   importLabel:SetText(GREY .. "Import - paste a profile string here, then Import:" .. ENDC)
-  panel.importBox = editbox(panel, 470, true)
-  panel.importBox:SetPoint("TOPLEFT", 16, -378)
+  panel.importBox = place(editbox(panel, 470, true), panel, 16, -378)
   button(panel, "Import", 110, function()
     local s = panel.importBox:GetText()
     if s and s ~= "" and ns.importProfile(s) then panel.importBox:SetText("") end
@@ -341,13 +457,14 @@ end
 
 -- ── Registration ─────────────────────────────────────────────────────────────
 
-local function register()
-  if not (Settings and Settings.RegisterCanvasLayoutSubcategory and ns.settingsCategory) then return end
+-- Builds both pages and returns them. Options.lua owns the registering, because
+-- the tabbed page is the addon's own category rather than a sub-page of it, and
+-- so has to exist before that category is created.
+function ns.buildPanels()
+  if ns.panels then return ns.panels end
   local settings = buildSettings()
   local profiles = buildProfiles()
   ns.panels = { settings = settings, profiles = profiles }
-  pcall(Settings.RegisterCanvasLayoutSubcategory, ns.settingsCategory, settings, "Settings")
-  pcall(Settings.RegisterCanvasLayoutSubcategory, ns.settingsCategory, profiles, "Profiles")
   -- Switching, creating, resetting or deleting a profile changes every value on
   -- screen, so redraw both pages (and re-tick the overlay through its own hook).
   local overlayHook = ns.onProfileChanged
@@ -356,8 +473,5 @@ local function register()
     pcall(settings.refresh)
     pcall(profiles.refresh)
   end
+  return ns.panels
 end
-
-local loader = CreateFrame("Frame")
-loader:RegisterEvent("PLAYER_LOGIN")
-loader:SetScript("OnEvent", function() pcall(register) end)

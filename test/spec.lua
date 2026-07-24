@@ -887,7 +887,11 @@ local panels = ns.panels
 ok(panels and panels.settings and panels.profiles, "the Settings and Profiles sub-pages are built")
 local subs = {}
 for _, s in ipairs(Mock.settings.subcategories or {}) do subs[s.name] = true end
-ok(subs["Settings"] and subs["Profiles"], "both sub-pages register under the addon category")
+ok(subs["All settings"] and subs["Profiles"], "both sub-pages register under the addon category")
+-- Clicking the addon's own name lands on the tabbed page, rather than on a
+-- second settings screen that looks nothing like it.
+ok(Mock.settings.canvas and Mock.settings.canvas.frame == panels.settings,
+  "the addon's own category is the tabbed page")
 
 local settings = panels.settings
 ok(settings.tabs["Mythic+ timer"] and settings.tabs["Dungeons window"] and settings.tabs["Chat"],
@@ -904,6 +908,22 @@ for g in pairs(settings.tabs) do
   ok(settings.desc:GetText():find(ns.TAB_DESC[g], 1, true) ~= nil,
     "selecting '" .. g .. "' shows its description")
 end
+
+-- The About tab: which version you are on, and where the addon lives.
+local about = settings.pages["About"]
+ok(about ~= nil and settings.tabs["About"] ~= nil, "there is an About tab")
+has(about.version:GetText(), "2026.7.24", "About names the installed version")
+has(about.updated:GetText(), "24 Jul 2026",
+  "and turns the date-stamped version into a readable date")
+ok(about.curseforge:GetText() == "https://www.curseforge.com/wow/addons/mythic-timer-and-tools/",
+  "About carries the CurseForge address")
+ok(about.github:GetText() == "https://github.com/Friftycode/mythicplus-timer-and-tools",
+  "and the GitHub address")
+-- Typing over a link puts it back, since an edit box cannot be made read-only.
+about.github:SetText("junk")
+about.github.__scripts.OnTextChanged(about.github)
+ok(about.github:GetText() == "https://github.com/Friftycode/mythicplus-timer-and-tools",
+  "a link cannot be edited away")
 
 settings.select("Mythic+ timer")
 ns.setCfg("showbosses", true)

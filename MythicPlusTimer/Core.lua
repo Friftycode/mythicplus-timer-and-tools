@@ -90,6 +90,7 @@ ns.TAB_DESC = {
   ["Dungeons window"] = "What this addon adds inside Blizzard's own Mythic+ Dungeons window.",
   ["Chat"] = "What it adds to your chat windows.",
   ["Alerts"] = "Notices that appear on screen while you play.",
+  ["About"] = "Which version you are on, and where to find the addon.",
 }
 
 -- ── Profiles ─────────────────────────────────────────────────────────────
