@@ -1,6 +1,6 @@
 {
   "name": "mythicplus-timer-and-tools",
-  "version": "2026.7.24",
+  "version": "2026.7.24.1",
   "private": true,
   "description": "World of Warcraft addon: a Mythic+ run timer overlay plus the smaller tools around a key",
   "type": "commonjs",
