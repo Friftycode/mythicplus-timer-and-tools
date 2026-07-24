@@ -1,0 +1,14 @@
+package-as: MythicPlusTimer
+
+enable-nolib-creation: no
+
+# Only the addon folder ships. Everything below is repo scaffolding.
+ignore:
+  - .github
+  - scripts
+  - test
+  - README.md
+  - package.json
+  - package-lock.json
+  - .gitattributes
+  - .pkgmeta

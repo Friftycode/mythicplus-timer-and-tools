@@ -1,0 +1,59 @@
+name: monthly release
+
+# Keeps the shipped .toc Interface number current and cuts a release tag every
+# month. CurseForge is linked to this repo and packages any tagged commit it
+# sees, so pushing a tag here is the whole deploy: no API tokens, no secrets.
+# The "empty" build (nothing changed but the tag) still re-tags for the live
+# client so the addon never shows as out of date.
+on:
+  schedule:
+    - cron: "0 12 1 * *" # 12:00 UTC on the 1st of each month
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (default: today's date, e.g. 2026.7.24)"
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - run: npm ci
+      - run: npm test
+
+      - name: Resolve version and current interface
+        id: meta
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          [ -z "$VERSION" ] && VERSION="$(date -u +%Y.%-m.%-d)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "interface=$(node scripts/current-interface.mjs || true)" >> "$GITHUB_OUTPUT"
+
+      - name: Stamp version and interface, then re-test
+        run: |
+          node scripts/apply-release.mjs "${{ steps.meta.outputs.version }}" "${{ steps.meta.outputs.interface }}"
+          npm test
+
+      - name: Commit, tag, and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -am "release: ${{ steps.meta.outputs.version }}"
+            git push
+          fi
+          TAG="v${{ steps.meta.outputs.version }}"
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "$TAG"
