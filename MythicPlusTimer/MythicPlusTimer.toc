@@ -4,6 +4,7 @@
 ## Author: Friftycode
 ## Version: 2026.7.24
 ## SavedVariables: MythicPlusTimerConfig, MythicPlusTimerRun
+## X-Curse-Project-ID: 1623279
 ## IconTexture: Interface\Icons\inv_relics_hourglass
 ## X-License: MIT
 

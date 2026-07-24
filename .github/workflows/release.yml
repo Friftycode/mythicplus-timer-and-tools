@@ -26,6 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the packager reads past tags to build a changelog
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -57,3 +59,12 @@ jobs:
           TAG="v${{ steps.meta.outputs.version }}"
           git tag -a "$TAG" -m "$TAG"
           git push origin "$TAG"
+
+      # Fallback path. CurseForge's repo integration normally packages the tag
+      # above on its own; this only runs if a CF_API_KEY secret exists, for when
+      # that integration is not set up. Running both would upload the file twice.
+      - name: Upload to CurseForge directly
+        if: ${{ secrets.CF_API_KEY != '' }}
+        uses: BigWigsMods/packager@master
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
