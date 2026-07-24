@@ -577,6 +577,18 @@ local function chatLine(msg) return Mock.chat("CHAT_MSG_GUILD", msg) end
 
 ok(#(Mock.chatFilters.CHAT_MSG_GUILD or {}) == 1, "one chat filter is registered per channel")
 
+-- Every filter has to hand back the whole argument list, not just the values it
+-- reads. The client reassigns arg1..arg14 from a filter's return, so a short one
+-- nils the language, flags and line id, and its own handler then errors on them.
+-- CHAT_MSG_PARTY carries both of ours, which is where this first showed up.
+for _, ev in ipairs({ "CHAT_MSG_PARTY", "CHAT_MSG_SAY", "CHAT_MSG_GUILD" }) do
+  Mock.chat(ev, "hello")
+  local a = Mock.lastChatArgs
+  ok(a[3] == "Common", ev .. " keeps its language argument through the filters")
+  ok(a[11] == 11 and a[12] == "Player-1234-ABCDEF",
+    ev .. " keeps its line id and guid through the filters")
+end
+
 local line = chatLine("check https://example.com/keys?a=1 for the list")
 has(line, "|Hmpturl:https://example.com/keys?a=1|h", "a web address becomes a clickable link")
 has(line, "check ", "the words before it are untouched")

@@ -118,9 +118,13 @@ local function blShowAlert(phrase, who)
   f:Show()
 end
 
-local function blOnChat(_, _, msg, sender)
-  if not cfg("bloodlust") then return false, msg, sender end
-  if type(msg) ~= "string" or isSecret(msg) then return false, msg, sender end
+-- Every return has to hand back the whole argument list, not just the two
+-- values this cares about. The client reassigns arg1..arg14 from what a filter
+-- returns, so a short return nils out the language, flags and line id, and its
+-- own message handler then errors on them.
+local function blOnChat(_, _, msg, sender, ...)
+  if not cfg("bloodlust") then return false, msg, sender, ... end
+  if type(msg) ~= "string" or isSecret(msg) then return false, msg, sender, ... end
   local phrase = blCalled(msg)
   if phrase then
     local who = (type(sender) == "string" and not isSecret(sender)) and sender or nil
@@ -128,7 +132,7 @@ local function blOnChat(_, _, msg, sender)
     pcall(blShowAlert, phrase, who)
   end
   -- Always false: this reads chat, it never eats it.
-  return false, msg, sender
+  return false, msg, sender, ...
 end
 
 -- Where a call actually comes from. Guild and whisper are deliberately out:

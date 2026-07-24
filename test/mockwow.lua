@@ -519,15 +519,32 @@ for i = 1, NUM_CHAT_WINDOWS do
 end
 Mock.blizzLinks = {}
 
--- Runs one chat line through the registered filters, the way the client does,
--- and hands back the message as it would be drawn.
+local unpack = unpack or table.unpack
+
+-- A player-typed line's full argument list, in the client's order: message,
+-- sender, language, channel, target, flags, ... , line id, guid, and the
+-- trailing booleans.
+local function chatArgs(msg)
+  return { msg, "Sender", "Common", "", "Target", "", 0, 0, "", 0, 11,
+    "Player-1234-ABCDEF", 0, false, false, false, false }
+end
+
+-- Runs one chat line through the registered filters the way the client really
+-- does: a filter is handed the whole argument list, and arg1..arg14 are then
+-- reassigned from what it returns. A filter that returns only the values it
+-- cares about therefore nils out the rest here too, so that mistake fails a
+-- test instead of only erroring inside Blizzard's own message handler.
 function Mock.chat(event, msg)
+  local a = chatArgs(msg)
   for _, fn in ipairs(Mock.chatFilters[event] or {}) do
-    local suppress, rewritten = fn(_G.ChatFrame1, event, msg, "Sender")
-    if suppress then return nil end
-    if rewritten ~= nil then msg = rewritten end
+    local r = { fn(_G.ChatFrame1, event, unpack(a, 1, 17)) }
+    if r[1] then return nil end
+    if r[2] ~= nil then
+      for i = 1, 14 do a[i] = r[i + 1] end
+    end
   end
-  return msg
+  Mock.lastChatArgs = a
+  return a[1]
 end
 
 -- Clicks the first hyperlink in a rendered chat line, on the given window.
