@@ -49,9 +49,9 @@ end
 for g in pairs(optionGroups) do
   ok(seenHeader[g], "section '" .. tostring(g) .. "' has a heading in the panel")
 end
--- Five option groups, plus the "Test frames" section the buttons sit under.
-ok(#Mock.settings.headers == 6,
-  "six sections drawn, got " .. #Mock.settings.headers)
+-- Four option groups, plus the "Test frames" section the buttons sit under.
+ok(#Mock.settings.headers == 5,
+  "five sections drawn, got " .. #Mock.settings.headers)
 ok(seenHeader["Test frames"], "the test frames have their own section heading")
 
 -- Each row also names the sub-heading it sits under on the tabbed page. Rows
@@ -878,15 +878,36 @@ for _, s in ipairs(Mock.settings.subcategories or {}) do subs[s.name] = true end
 ok(subs["Settings"] and subs["Profiles"], "both sub-pages register under the addon category")
 
 local settings = panels.settings
-ok(settings.tabs["Run overlay"] and settings.tabs["Display"] and settings.tabs["Chat"],
+ok(settings.tabs["Mythic+ timer"] and settings.tabs["Dungeons window"] and settings.tabs["Chat"],
   "a horizontal tab exists for each option group")
-settings.select("Display")
-ok(settings.pages["Display"]:IsShown() and settings.pages["Run overlay"]:IsShown() == false,
+ok(settings.tabs["Display"] == nil, "the display toggles no longer get a tab of their own")
+settings.select("Chat")
+ok(settings.pages["Chat"]:IsShown() and settings.pages["Mythic+ timer"]:IsShown() == false,
   "selecting a tab shows only that group's page")
 
+-- Every tab says what it changes; a name on its own does not.
+for g in pairs(settings.tabs) do
+  ok(ns.TAB_DESC[g] ~= nil, "tab '" .. g .. "' has a description")
+  settings.select(g)
+  ok(settings.desc:GetText():find(ns.TAB_DESC[g], 1, true) ~= nil,
+    "selecting '" .. g .. "' shows its description")
+end
+
+settings.select("Mythic+ timer")
 ns.setCfg("showbosses", true)
 settings.refresh()
-local cb = settings.pages["Display"].checks["showbosses"]
+local cb = settings.pages["Mythic+ timer"].checks["showbosses"]
+-- Each row carries its own explanation, reachable without leaving the tab.
+ok(cb.help ~= nil, "a row gets a help icon")
+cb.help.__scripts.OnEnter(cb.help)
+local helpTip = table.concat(GameTooltip.lines, "\n")
+has(helpTip, "Show bosses", "the help tooltip names the setting")
+has(helpTip, "Draw the bosses section",
+  "hovering the help icon explains the setting")
+-- The box itself explains too, so the icon is a hint rather than the only way in.
+cb.__scripts.OnEnter(cb)
+has(table.concat(GameTooltip.lines, "\n"), "Draw the bosses section",
+  "hovering the checkbox explains it as well")
 ok(cb:GetChecked() == true, "a checkbox reflects the current setting")
 cb:SetChecked(false)
 cb.__scripts.OnClick(cb)

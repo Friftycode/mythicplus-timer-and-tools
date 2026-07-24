@@ -10,7 +10,7 @@ local cfg, setCfg = ns.cfg, ns.setCfg
 -- cfg/setCfg, so this and the flat panel always agree.
 
 local TAB_H, TAB_GAP, STRIP_Y = 26, 4, -14
-local CONTENT_Y = -58
+local DESC_Y, CONTENT_Y = -48, -74
 local ROW_H, SECTION_GAP = 26, 14
 
 -- Tab and row colours, kept here so the two pages can't drift apart.
@@ -41,7 +41,35 @@ local function hoverTint(b, alpha)
   if hl and hl.SetVertexColor then hl:SetVertexColor(1, 1, 1, alpha) end
 end
 
-local function checkbox(parent, label, get, set)
+-- Shows a row's own explanation on hover. Drawn as a "?" font string rather than
+-- an art file, so there is nothing to break on a patch, and it carries the same
+-- text the flat Blizzard panel puts in its tooltips.
+local function attachTooltip(frame, title, body)
+  frame:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:AddLine(WHITE .. title .. ENDC)
+    if body and body ~= "" then GameTooltip:AddLine(body, 0.9, 0.9, 0.9, true) end
+    GameTooltip:Show()
+  end)
+  frame:SetScript("OnLeave", function() GameTooltip:Hide() end)
+end
+
+local function helpIcon(parent, anchorTo, title, body)
+  local h = CreateFrame("Button", nil, parent)
+  h:SetSize(16, 16)
+  h:SetPoint("LEFT", anchorTo, "RIGHT", 6, 0)
+  h.disc = h:CreateTexture(nil, "BACKGROUND")
+  h.disc:SetAllPoints()
+  paint(h.disc, { 1, 1, 1, 0.07 })
+  h.mark = h:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  h.mark:SetPoint("CENTER")
+  h.mark:SetText(GOLD .. "?" .. ENDC)
+  hoverTint(h, 0.12)
+  attachTooltip(h, title, body)
+  return h
+end
+
+local function checkbox(parent, label, get, set, tooltip)
   local cb = CreateFrame("CheckButton", nil, parent)
   cb:SetSize(22, 22)
   cb:SetNormalTexture("Interface\\Buttons\\UI-CheckBox-Up")
@@ -53,6 +81,11 @@ local function checkbox(parent, label, get, set)
   cb.label:SetText(label)
   cb.refresh = function() cb:SetChecked(get() and true or false) end
   cb:SetScript("OnClick", function(self) set(self:GetChecked() and true or false) end)
+  if tooltip and tooltip ~= "" then
+    cb.help = helpIcon(parent, cb.label, label, tooltip)
+    -- The box itself explains too, so the "?" is a hint rather than the only way in.
+    attachTooltip(cb, label, tooltip)
+  end
   cb.refresh()
   return cb
 end
@@ -128,9 +161,18 @@ local function buildSettings()
   end
 
   panel.tabs, panel.pages = {}, {}
+
+  -- Says what the tab you are on actually changes.
+  panel.desc = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  panel.desc:SetPoint("TOPLEFT", panel, "TOPLEFT", 24, DESC_Y)
+  panel.desc:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -24, DESC_Y)
+  panel.desc:SetJustifyH("LEFT")
+
   local function select(group)
     for g, page in pairs(panel.pages) do page:SetShown(g == group) end
     for g, tab in pairs(panel.tabs) do tab.setActive(g == group) end
+    local d = (ns.TAB_DESC or {})[group]
+    panel.desc:SetText(d and (GREY .. d .. ENDC) or "")
     panel.selected = group
   end
   panel.select = select
@@ -167,7 +209,8 @@ local function buildSettings()
       end
       local cb = checkbox(page, o.label,
         function() return cfg(o.key) end,
-        function(v) setCfg(o.key, v); local ch = ns.optionChanged[o.key]; if ch then pcall(ch) end end)
+        function(v) setCfg(o.key, v); local ch = ns.optionChanged[o.key]; if ch then pcall(ch) end end,
+        o.tooltip)
       cb:SetPoint("TOPLEFT", page, "TOPLEFT", 0, yy)
       yy = yy - ROW_H
       page.checks[o.key] = cb
