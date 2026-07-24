@@ -517,6 +517,18 @@ has(Mock.rendered(popup()), "502", "and appears once the client answers")
 Mock.units.party1.ilvl = nil
 Mock.fire("GROUP_LEFT")
 
+-- The leader's score needs no inspect and no proximity: it rides along on the
+-- listing. Matched on the short name, because LFG reports "Name-Realm".
+Mock.units.party3 = { name = "Keypusher", class = "WARRIOR", guid = "P-4" }
+Mock.fire("LFG_LIST_JOINED_GROUP", 77)
+has(Mock.rendered(popup()), "3105", "the leader's score comes straight from the listing")
+Mock.searchResults[77].leaderName = "Keypusher-Ravencrest"
+Mock.fire("LFG_LIST_JOINED_GROUP", 77)
+has(Mock.rendered(popup()), "3105", "and still matches when the listing carries a realm")
+Mock.searchResults[77].leaderName = "Keypusher"
+Mock.units.party3 = nil
+Mock.fire("GROUP_LEFT")
+
 -- ── Teleport from the Season Best icons ───────────────────────────────────
 
 Mock.showFrame(ChallengesFrame)

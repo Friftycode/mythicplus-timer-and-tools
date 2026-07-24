@@ -25,6 +25,12 @@ local JP_COL = {
 
 local jpIlvlCache = {}  -- unit guid -> item level, from a completed inspect
 local jpInspectGUID     -- guid of the inspect currently in flight, or nil
+local jpLeader          -- { name, score } from the listing you joined, or nil
+
+-- LFG reports "Name-Realm"; unit names are the short form.
+local function jpPlainName(full)
+  return (tostring(full or ""):gsub("%-.*$", ""))
+end
 
 local function jpIsSelf(unit)
   if type(UnitIsUnit) ~= "function" then return unit == "player" end
@@ -137,7 +143,13 @@ local function jpRenderParty(f)
       row.name:SetText(ns.classColoredName(name, (okC and type(cl) == "string") and cl or nil))
       local il = jpIlvl(unit)
       row.ilvl:SetText(il and (WHITE .. il .. ENDC) or (GREY .. "-" .. ENDC))
+      -- The client only volunteers a score for someone it has data for, which
+      -- usually means nobody but you until the group gathers. The listing's
+      -- leader score is the one exception, so fall back to it for that row.
       local sc = jpScore(unit)
+      if not sc and jpLeader and jpLeader.score and name == jpLeader.name then
+        sc = jpLeader.score
+      end
       row.score:SetText(sc and (GOLD .. sc .. ENDC) or (GREY .. "-" .. ENDC))
       row.name:Show(); row.ilvl:Show(); row.score:Show()
     end
@@ -293,8 +305,9 @@ local function jpArmTeleport(f, dungeon)
   return nil
 end
 
-local function renderJoinFrame(dungeon, listingTitle, leaderName)
+local function renderJoinFrame(dungeon, listingTitle, leaderName, leaderScore)
   local f = ensureJoinFrame()
+  jpLeader = leaderName and { name = jpPlainName(leaderName), score = leaderScore } or nil
   -- Kept plain alongside the colored label: the rendered string carries |cff
   -- codes, so it can't be fed back into a name match.
   f.dungeonName = dungeon
@@ -330,7 +343,12 @@ local function onJoinedGroup(searchResultID)
   if not dungeon or dungeon == "" then return end
   local leader = (type(info.leaderName) == "string" and not isSecret(info.leaderName)) and info.leaderName or nil
   local title = (type(info.name) == "string" and not isSecret(info.name)) and info.name or nil
-  renderJoinFrame(dungeon, title, leader)
+  -- The listing's own copy of the leader's overall score. Unlike every other
+  -- member's, this needs no inspect and no proximity. Like the names, it can
+  -- come back as a secret value, so it goes through the same check.
+  local leaderScore = info.leaderOverallDungeonScore
+  if not (type(leaderScore) == "number" and not isSecret(leaderScore)) then leaderScore = nil end
+  renderJoinFrame(dungeon, title, leader, leaderScore)
 end
 
 -- Preview frame for positioning. "Preview" isn't a real dungeon, so no teleport

@@ -226,6 +226,9 @@ Mock.searchResults = {
   [77] = {
     name = "+18 AA  need dps  link io",
     leaderName = "Keypusher",
+    -- The listing's copy of the leader's score, the one rating the client hands
+    -- over before anybody is close enough to inspect.
+    leaderOverallDungeonScore = 3105,
     activityIDs = { 1301 },
   },
   [78] = { name = "Heroic raid", leaderName = "Raidlead", activityIDs = { 9001 } },
