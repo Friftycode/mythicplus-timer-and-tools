@@ -24,6 +24,9 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # A step's `if` cannot read `secrets`, so surface the key here and test that.
+    env:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -64,7 +67,5 @@ jobs:
       # above on its own; this only runs if a CF_API_KEY secret exists, for when
       # that integration is not set up. Running both would upload the file twice.
       - name: Upload to CurseForge directly
-        if: ${{ secrets.CF_API_KEY != '' }}
+        if: ${{ env.CF_API_KEY != '' }}
         uses: BigWigsMods/packager@master
-        env:
-          CF_API_KEY: ${{ secrets.CF_API_KEY }}
