@@ -188,15 +188,6 @@ function ns.setCfg(k, v)
   activeTable()[k] = v
 end
 
--- A table view of the active profile, for APIs that read and write config
--- through a table rather than functions (Blizzard's Settings binder). Every
--- access routes to cfg/setCfg, so a checkbox bound to it follows the active
--- profile even after the profile is switched.
-ns.cfgProxy = setmetatable({}, {
-  __index = function(_, k) return ns.cfg(k) end,
-  __newindex = function(_, k, v) ns.setCfg(k, v) end,
-})
-
 -- ── Profile operations ───────────────────────────────────────────────────
 -- The management a Profiles page needs. All name the active profile through
 -- LoadProfile so the overlay and options redraw against the newly chosen set.

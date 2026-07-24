@@ -342,6 +342,25 @@ local function buildSettings()
       yy = yy - ROW_H
       page.checks[o.key] = cb
     end
+    page.nextY = yy
+  end
+
+  -- The one control that isn't a checkbox: it puts every movable frame on screen
+  -- at once so they can be dragged. It lives on the first tab, since the overlay
+  -- is the frame people come here to move.
+  local firstPage = panel.pages[order[1]]
+  if firstPage and #ns.optionButtons > 0 then
+    local yy = (firstPage.nextY or 0) - SECTION_GAP
+    heading(firstPage, "Test frames", 0, yy, 440)
+    yy = yy - 26
+    firstPage.buttons = {}
+    for _, b in ipairs(ns.optionButtons) do
+      local btn = button(firstPage, b.label, 210, function() pcall(b.run) end)
+      btn:SetPoint("TOPLEFT", firstPage, "TOPLEFT", 0, yy)
+      attachTooltip(btn, b.name or b.label, b.tooltip)
+      firstPage.buttons[b.label] = btn
+      yy = yy - 26
+    end
   end
 
   buildAbout(addTab(ABOUT))
@@ -352,6 +371,9 @@ local function buildSettings()
       for _, cb in pairs(page.checks) do cb.refresh() end
     end
   end
+  -- There is more than one of these page (see ns.buildPanels), so each one
+  -- redraws as it is shown rather than trusting the other to have told it.
+  panel:SetScript("OnShow", function() pcall(panel.refresh) end)
 
   select(order[1])
   return panel
@@ -463,14 +485,19 @@ end
 function ns.buildPanels()
   if ns.panels then return ns.panels end
   local settings = buildSettings()
+  -- The addon's own entry in the AddOns list and the "Settings" sub-page under
+  -- it show the same thing, and one frame cannot be in two categories, so there
+  -- are two of these. Each redraws itself when shown, so they cannot disagree.
+  local settingsSub = buildSettings()
   local profiles = buildProfiles()
-  ns.panels = { settings = settings, profiles = profiles }
+  ns.panels = { settings = settings, settingsSub = settingsSub, profiles = profiles }
   -- Switching, creating, resetting or deleting a profile changes every value on
   -- screen, so redraw both pages (and re-tick the overlay through its own hook).
   local overlayHook = ns.onProfileChanged
   ns.onProfileChanged = function()
     if type(overlayHook) == "function" then pcall(overlayHook) end
     pcall(settings.refresh)
+    pcall(settingsSub.refresh)
     pcall(profiles.refresh)
   end
   return ns.panels

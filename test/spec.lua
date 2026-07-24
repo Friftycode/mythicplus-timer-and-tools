@@ -25,34 +25,27 @@ local guild = function() return _G.MythicPlusTimerGuildFrame end
 Mock.fire("PLAYER_LOGIN")
 
 ok(Mock.settings.category == "Mythic+ Timer and Tools", "settings category is 'Mythic+ Timer and Tools'")
-ok(#Mock.settings.checkboxes == 14, "fourteen checkboxes registered, got " .. #Mock.settings.checkboxes)
-local keys = {}
-for _, c in ipairs(Mock.settings.checkboxes) do keys[c.key] = true end
+
+-- Every option is drawn on the tabbed page, which is the only settings surface:
+-- one checkbox each, on the tab its group names.
+local settingsPages = MythicPlusTimerNamespace.panels.settings.pages
+local keys, boxCount = {}, 0
+for _, page in pairs(settingsPages) do
+  for key in pairs(page.checks) do keys[key] = true; boxCount = boxCount + 1 end
+end
+ok(boxCount == 14, "fourteen checkboxes drawn, got " .. boxCount)
 ok(keys.mythicplustimer and keys.autonameplates and keys.letmefocus and keys.guildkeys
   and keys.autoslotkey and keys.joinpopup and keys.seasontp and keys.chatlinks
   and keys.chatcopy and keys.bloodlust,
   "all ten option keys present")
 
--- The panel is grouped: every option declares a heading, each heading is opened
--- exactly once, and the order matches the order the options are listed in.
-local seenHeader, headerDupes = {}, 0
-for _, h in ipairs(Mock.settings.headers) do
-  if seenHeader[h] then headerDupes = headerDupes + 1 end
-  seenHeader[h] = true
-end
-ok(headerDupes == 0, "no section heading is opened twice")
-local optionGroups = {}
 for _, o in ipairs(MythicPlusTimerNamespace.OPTIONS) do
   ok(o.group ~= nil, "option '" .. o.key .. "' declares a section")
-  optionGroups[o.group] = true
+  ok(settingsPages[o.group] ~= nil,
+    "option '" .. o.key .. "' has a tab for its group '" .. tostring(o.group) .. "'")
+  ok(settingsPages[o.group].checks[o.key] ~= nil,
+    "option '" .. o.key .. "' is drawn on that tab")
 end
-for g in pairs(optionGroups) do
-  ok(seenHeader[g], "section '" .. tostring(g) .. "' has a heading in the panel")
-end
--- Four option groups, plus the "Test frames" section the buttons sit under.
-ok(#Mock.settings.headers == 5,
-  "five sections drawn, got " .. #Mock.settings.headers)
-ok(seenHeader["Test frames"], "the test frames have their own section heading")
 
 -- Each row also names the sub-heading it sits under on the tabbed page. Rows
 -- sharing one have to stay adjacent, or that heading would be drawn twice.
@@ -732,11 +725,11 @@ MythicPlusTimerNamespace.setCfg("bloodlust", true)
 -- Every movable frame only appears at its own moment, which is the worst time
 -- to be arranging a screen. One button puts them all up and takes them away.
 
-local testBtn
-for _, b in ipairs(Mock.settings.buttons) do
-  if b.label == "Show or hide test frames" then testBtn = b end
-end
-ok(testBtn ~= nil, "a test-frames button is registered in the options panel")
+-- It lives on the first tab, since the overlay is what people come here to move.
+local firstTab = MythicPlusTimerNamespace.OPTIONS[1].group
+local testBtn = MythicPlusTimerNamespace.panels.settings.pages[firstTab].buttons
+  and MythicPlusTimerNamespace.panels.settings.pages[firstTab].buttons["Show or hide test frames"]
+ok(testBtn ~= nil, "a test-frames button is drawn on the settings page")
 
 -- Every movable frame declares itself; the button knows none of them by name.
 local previewNames = {}
@@ -748,7 +741,7 @@ ok(previewNames["bloodlust alert"], "the bloodlust alert registered a test frame
 lust():Hide()
 popup():Hide()
 overlay():Hide()
-testBtn.run()
+testBtn.__scripts.OnClick(testBtn)
 ok(overlay():IsShown(), "the button puts the run overlay on screen")
 ok(popup():IsShown(), "and the join popup")
 ok(lust():IsShown(), "and the bloodlust alert")
@@ -776,7 +769,7 @@ overlay().__scripts.OnDragStop(overlay())
 ok(MythicPlusTimerNamespace.cfg("mppoint") ~= nil,
   "dragging the overlay test frame remembers its position")
 
-testBtn.run()
+testBtn.__scripts.OnClick(testBtn)
 ok(overlay():IsShown() == false and popup():IsShown() == false and lust():IsShown() == false,
   "pressing it again takes every test frame away")
 
@@ -887,11 +880,22 @@ local panels = ns.panels
 ok(panels and panels.settings and panels.profiles, "the Settings and Profiles sub-pages are built")
 local subs = {}
 for _, s in ipairs(Mock.settings.subcategories or {}) do subs[s.name] = true end
-ok(subs["All settings"] and subs["Profiles"], "both sub-pages register under the addon category")
--- Clicking the addon's own name lands on the tabbed page, rather than on a
--- second settings screen that looks nothing like it.
+ok(subs["Settings"] and subs["Profiles"], "both sub-pages register under the addon category")
+-- The addon's own name and the "Settings" entry under it are the same screen.
 ok(Mock.settings.canvas and Mock.settings.canvas.frame == panels.settings,
   "the addon's own category is the tabbed page")
+local settingsSub
+for _, s in ipairs(Mock.settings.subcategories or {}) do
+  if s.name == "Settings" then settingsSub = s end
+end
+ok(settingsSub and settingsSub.frame == panels.settingsSub,
+  "the Settings sub-page is a tabbed page too")
+ok(panels.settingsSub ~= panels.settings,
+  "and its own frame, since one frame cannot be in two categories")
+-- Both carry the same tabs, so neither is a lesser version of the other.
+for g in pairs(panels.settings.pages) do
+  ok(panels.settingsSub.pages[g] ~= nil, "the sub-page has the '" .. g .. "' tab as well")
+end
 
 local settings = panels.settings
 ok(settings.tabs["Mythic+ timer"] and settings.tabs["Dungeons window"] and settings.tabs["Chat"],
