@@ -1,8 +1,8 @@
-## Interface: 120005, 120007
+## Interface: 120007
 ## Title: Mythic+ Timer and Tools
 ## Notes: Movable Mythic+ run overlay: time remaining, the +2/+3 upgrade windows, enemy forces, bosses, and deaths. Plus your guild's keys this week.
 ## Author: Friftycode
-## Version: 1.0.0
+## Version: 2026.7.24
 ## SavedVariables: MythicPlusTimerConfig, MythicPlusTimerRun
 ## IconTexture: Interface\Icons\inv_relics_hourglass
 ## X-License: MIT
