@@ -2,11 +2,20 @@ package-as: MythicPlusTimer
 
 enable-nolib-creation: no
 
+# The addon lives in a subfolder, but the packager only looks for the .toc at
+# the repo root. This lifts the folder's contents up one level in the built
+# package, which is also how the packager learns where the .toc is.
+move-folders:
+  MythicPlusTimer/MythicPlusTimer: MythicPlusTimer
+
 # Only the addon folder ships. Everything below is repo scaffolding.
+# node_modules is not in the repo but the release job runs `npm ci` first, so
+# it is present in the workspace by the time the packager copies files.
 ignore:
   - .github
   - scripts
   - test
+  - node_modules
   - README.md
   - package.json
   - package-lock.json
