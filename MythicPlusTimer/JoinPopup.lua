@@ -15,6 +15,28 @@ local jpTeleport   -- { spellID, name, icon } for this dungeon, or nil
 
 local JP_UNITS = { "player", "party1", "party2", "party3", "party4" }
 
+-- Roster columns. The header and every row are laid out from these, so the
+-- numbers stay under their own heading whatever the values are.
+local JP_COL = {
+  name  = { x = MP_PAD,       w = 110, justify = "LEFT" },
+  ilvl  = { x = MP_PAD + 110, w = 60,  justify = "CENTER" },
+  score = { x = MP_PAD + 170, w = JP_W - MP_PAD * 2 - 170, justify = "CENTER" },
+}
+
+local jpIlvlCache = {}  -- unit guid -> item level, from a completed inspect
+local jpInspectGUID     -- guid of the inspect currently in flight, or nil
+
+local function jpIsSelf(unit)
+  if type(UnitIsUnit) ~= "function" then return unit == "player" end
+  local ok, v = pcall(UnitIsUnit, unit, "player")
+  return (ok and v) and true or false
+end
+
+local function jpGUID(unit)
+  local ok, g = pcall(UnitGUID, unit)
+  return ok and g or nil
+end
+
 -- Mythic+ score for a unit, straight from the client's own rating summary (it
 -- works for group members without an inspect). nil when there is none to show.
 local function jpScore(unit)
@@ -24,13 +46,66 @@ local function jpScore(unit)
   return nil
 end
 
--- Average item level. Only your own is known right away; a party member's needs
--- an inspect the client may not have cached yet, so this is often nil for them.
+-- Average item level. Your own comes from the character sheet, because the
+-- inspect API answers 0 for yourself. Everyone else needs an inspect the client
+-- has actually completed, so their number arrives later (see jpRequestInspect).
 local function jpIlvl(unit)
+  if jpIsSelf(unit) then
+    if type(GetAverageItemLevel) ~= "function" then return nil end
+    local ok, _, equipped = pcall(GetAverageItemLevel)
+    if ok and type(equipped) == "number" and equipped > 0 then return math.floor(equipped) end
+    return nil
+  end
+  local guid = jpGUID(unit)
+  if guid and jpIlvlCache[guid] then return jpIlvlCache[guid] end
   if not (C_PaperDollInfo and C_PaperDollInfo.GetInspectItemLevel) then return nil end
   local ok, n = pcall(C_PaperDollInfo.GetInspectItemLevel, unit)
   if ok and type(n) == "number" and n > 0 then return math.floor(n) end
   return nil
+end
+
+-- The client answers one inspect at a time, and only for someone close enough
+-- to inspect at all. Ask about the first member we still have no number for;
+-- the rest follow as each INSPECT_READY lands. Right after joining a group
+-- nobody is in range yet, which is why the column starts out empty.
+local function jpRequestInspect()
+  if jpInspectGUID or type(NotifyInspect) ~= "function" then return end
+  if InCombatLockdown and InCombatLockdown() then return end
+  for _, unit in ipairs(JP_UNITS) do
+    if UnitExists(unit) and not jpIsSelf(unit) then
+      local guid = jpGUID(unit)
+      if guid and not jpIlvlCache[guid] then
+        local ok, can = pcall(CanInspect, unit)
+        if ok and can then
+          jpInspectGUID = guid
+          pcall(NotifyInspect, unit)
+          return
+        end
+      end
+    end
+  end
+end
+
+-- Files the item level an inspect just produced, then moves on to the next
+-- member. Returns true when something new was learned and the roster is stale.
+local function jpInspectReady(guid)
+  local learned = false
+  if guid and C_PaperDollInfo and C_PaperDollInfo.GetInspectItemLevel then
+    for _, unit in ipairs(JP_UNITS) do
+      if UnitExists(unit) and jpGUID(unit) == guid then
+        local ok, n = pcall(C_PaperDollInfo.GetInspectItemLevel, unit)
+        if ok and type(n) == "number" and n > 0 then
+          jpIlvlCache[guid] = math.floor(n)
+          learned = true
+        end
+        break
+      end
+    end
+  end
+  if jpInspectGUID == guid then jpInspectGUID = nil end
+  pcall(ClearInspectPlayer)
+  jpRequestInspect()
+  return learned
 end
 
 -- Draws one row per present party unit (name, item level, M+ score) and returns
@@ -45,15 +120,15 @@ local function jpRenderParty(f)
       if not row then
         row = {}
         local y = -MP_PAD - 102 - (n - 1) * 15
-        row.name = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        row.name:SetPoint("TOPLEFT", f, "TOPLEFT", MP_PAD, y)
-        row.name:SetWidth(118); row.name:SetJustifyH("LEFT"); row.name:SetWordWrap(false)
-        row.ilvl = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        row.ilvl:SetPoint("TOPLEFT", f, "TOPLEFT", MP_PAD + 118, y)
-        row.ilvl:SetWidth(50); row.ilvl:SetJustifyH("RIGHT")
-        row.score = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        row.score:SetPoint("TOPLEFT", f, "TOPLEFT", MP_PAD + 170, y)
-        row.score:SetWidth(JP_W - MP_PAD * 2 - 170); row.score:SetJustifyH("RIGHT")
+        for _, col in ipairs({ "name", "ilvl", "score" }) do
+          local c = JP_COL[col]
+          local fs = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+          fs:SetPoint("TOPLEFT", f, "TOPLEFT", c.x, y)
+          fs:SetWidth(c.w)
+          fs:SetJustifyH(c.justify)
+          fs:SetWordWrap(false)
+          row[col] = fs
+        end
         f.partyRows[n] = row
       end
       local okName, nm = pcall(UnitName, unit)
@@ -121,11 +196,18 @@ local function ensureJoinFrame()
   f.partyHeader = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   f.partyHeader:SetPoint("TOPLEFT", f, "TOPLEFT", MP_PAD, -MP_PAD - 74)
   f.partyHeader:SetText(GOLD .. "Party" .. ENDC)
-  f.partyCols = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  f.partyCols:SetPoint("TOPLEFT", f, "TOPLEFT", MP_PAD, -MP_PAD - 88)
-  f.partyCols:SetWidth(JP_W - MP_PAD * 2)
-  f.partyCols:SetJustifyH("RIGHT")
-  f.partyCols:SetText(GREY .. "ilvl        score" .. ENDC)
+  -- Column headings, laid out from the same table as the rows so a number is
+  -- always centred under its own title.
+  f.partyCols = {}
+  for col, text in pairs({ name = "member", ilvl = "ilvl", score = "score" }) do
+    local c = JP_COL[col]
+    local fs = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    fs:SetPoint("TOPLEFT", f, "TOPLEFT", c.x, -MP_PAD - 88)
+    fs:SetWidth(c.w)
+    fs:SetJustifyH(c.justify)
+    fs:SetText(GREY .. text .. ENDC)
+    f.partyCols[col] = fs
+  end
   f.partyRows = {}
 
   f.close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
@@ -136,22 +218,41 @@ local function ensureJoinFrame()
   -- Casting is protected, so the teleport is a real secure button. Its spell
   -- attribute can only be set out of combat (see jpArmTeleport).
   f.tp = CreateFrame("Button", "MythicPlusTimerTeleportButton", f, "SecureActionButtonTemplate")
-  f.tp:SetSize(30, 30)
+  f.tp:SetSize(34, 34)
   f.tp:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -MP_PAD, MP_PAD)
   f.tp:RegisterForClicks("AnyUp", "AnyDown")
   f.tp:SetAttribute("type", "spell")
+  -- A gold edge under the icon, so it reads as a button rather than as one more
+  -- decorative dungeon portrait sitting in the corner.
+  f.tp.border = f.tp:CreateTexture(nil, "BACKGROUND")
+  f.tp.border:SetPoint("TOPLEFT", f.tp, "TOPLEFT", -2, 2)
+  f.tp.border:SetPoint("BOTTOMRIGHT", f.tp, "BOTTOMRIGHT", 2, -2)
+  f.tp.border:SetColorTexture(0.88, 0.65, 0.31, 0.9)
   f.tp.icon = f.tp:CreateTexture(nil, "ARTWORK")
   f.tp.icon:SetAllPoints()
   f.tp.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+  -- Hover art via the button's own highlight slot, so it only shows on mouseover.
+  f.tp:SetHighlightTexture("Interface\\Buttons\\WHITE8X8")
+  local tpHL = f.tp:GetHighlightTexture()
+  if tpHL and tpHL.SetVertexColor then tpHL:SetVertexColor(1, 1, 1, 0.22) end
   f.tp:SetScript("OnEnter", function(self)
     if not self.spellName then return end
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
     GameTooltip:AddLine(GOLD .. "Teleport" .. ENDC)
     GameTooltip:AddLine(WHITE .. self.spellName .. ENDC)
+    GameTooltip:AddLine(GREY .. "Click to travel to this dungeon." .. ENDC)
     GameTooltip:Show()
   end)
   f.tp:SetScript("OnLeave", function() GameTooltip:Hide() end)
   f.tp:Hide()
+
+  -- Names what the icon does, right beside it. On its own the portrait gives no
+  -- clue that it is clickable, or where it sends you.
+  f.tpLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  f.tpLabel:SetPoint("BOTTOMRIGHT", f.tp, "BOTTOMLEFT", -8, 3)
+  f.tpLabel:SetWidth(JP_W - MP_PAD * 2 - 52)
+  f.tpLabel:SetJustifyH("RIGHT")
+  f.tpLabel:Hide()
 
   f.tpNote = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   f.tpNote:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", MP_PAD, MP_PAD + 8)
@@ -163,10 +264,18 @@ local function ensureJoinFrame()
   return f
 end
 
+-- Redraws the roster and sizes the popup to it: room for the rows plus a bottom
+-- strip for the teleport button and its label.
+local function jpRedrawParty(f)
+  local rows = jpRenderParty(f)
+  f:SetHeight(MP_PAD + 102 + math.max(1, rows) * 15 + 48)
+end
+
 -- Arms the teleport button for `dungeon`, or leaves it hidden. Returns a short
 -- line explaining why there's no button, or nil when there is one.
 local function jpArmTeleport(f, dungeon)
   f.tp:Hide()
+  f.tpLabel:Hide()
   f.tp.spellName = nil
   jpTeleport = jpFindTeleport(dungeon)
   if not jpTeleport then return nil end
@@ -178,6 +287,8 @@ local function jpArmTeleport(f, dungeon)
   f.tp:SetAttribute("spell", jpTeleport.spellID)
   f.tp.spellName = jpTeleport.name
   if jpTeleport.icon then f.tp.icon:SetTexture(jpTeleport.icon) end
+  f.tpLabel:SetText(GOLD .. "Teleport to" .. ENDC .. "\n" .. WHITE .. (dungeon or "") .. ENDC)
+  f.tpLabel:Show()
   f.tp:Show()
   return nil
 end
@@ -192,10 +303,11 @@ local function renderJoinFrame(dungeon, listingTitle, leaderName)
   f.leader:SetText(leaderName and (GREY .. "Leader: " .. ENDC .. WHITE .. leaderName .. ENDC) or "")
   local note = jpArmTeleport(f, dungeon)
   f.tpNote:SetText(note and (GREY .. note .. ENDC) or "")
-  local rows = jpRenderParty(f)
-  -- Room for the roster plus a bottom strip for the teleport button and note.
-  f:SetHeight(MP_PAD + 102 + math.max(1, rows) * 15 + 44)
+  jpRedrawParty(f)
   f:Show()
+  -- Nobody is in inspect range the instant you join, so this usually only
+  -- starts paying off once the group gathers.
+  jpRequestInspect()
 end
 
 local function onJoinedGroup(searchResultID)
@@ -228,7 +340,8 @@ ns.previewFrame("join popup",
   function() if jpFrame then jpFrame:Hide() end end)
 
 local joinEvents = CreateFrame("Frame")
-for _, ev in ipairs({ "LFG_LIST_JOINED_GROUP", "GROUP_LEFT", "GROUP_ROSTER_UPDATE", "PLAYER_REGEN_ENABLED" }) do
+for _, ev in ipairs({ "LFG_LIST_JOINED_GROUP", "GROUP_LEFT", "GROUP_ROSTER_UPDATE",
+  "PLAYER_REGEN_ENABLED", "INSPECT_READY" }) do
   pcall(joinEvents.RegisterEvent, joinEvents, ev)
 end
 joinEvents:SetScript("OnEvent", function(_, event, arg1)
@@ -238,9 +351,14 @@ joinEvents:SetScript("OnEvent", function(_, event, arg1)
     -- People joining or leaving while the popup is up: redraw the roster and
     -- re-size to it. Left alone when the popup isn't showing.
     if jpFrame and jpFrame:IsShown() then
-      local rows = jpRenderParty(jpFrame)
-      jpFrame:SetHeight(MP_PAD + 102 + math.max(1, rows) * 15 + 44)
+      jpRedrawParty(jpFrame)
+      jpRequestInspect()
     end
+  elseif event == "INSPECT_READY" then
+    -- A member's gear finally came back. Only redraw when it told us something
+    -- we didn't already have.
+    local learned = jpInspectReady(arg1)
+    if learned and jpFrame and jpFrame:IsShown() then jpRedrawParty(jpFrame) end
   elseif event == "GROUP_LEFT" then
     -- The group is gone, so the popup describing it is stale.
     if jpFrame and not (InCombatLockdown and InCombatLockdown()) then pcall(jpFrame.Hide, jpFrame) end

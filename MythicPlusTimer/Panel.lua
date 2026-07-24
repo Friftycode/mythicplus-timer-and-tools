@@ -9,7 +9,37 @@ local cfg, setCfg = ns.cfg, ns.setCfg
 -- category (the "+" in the AddOns list). Every control reads and writes through
 -- cfg/setCfg, so this and the flat panel always agree.
 
+local TAB_H, TAB_GAP, STRIP_Y = 26, 4, -14
+local CONTENT_Y = -58
+local ROW_H, SECTION_GAP = 26, 14
+
+-- Tab and row colours, kept here so the two pages can't drift apart.
+local C_TAB_ON = { 0.24, 0.19, 0.10, 0.95 }
+local C_TAB_OFF = { 0.09, 0.09, 0.09, 0.75 }
+local C_GOLD = { 0.88, 0.65, 0.31 }
+local C_DIM = { 0.62, 0.62, 0.62 }
+
 -- ── Controls ───────────────────────────────────────────────────────────────
+
+-- GetStringWidth is only meaningful once a font is applied and the string has
+-- been laid out; fall back to a per-character estimate so sizing never breaks.
+local function textWidth(fs, text)
+  local w = fs:GetStringWidth()
+  if type(w) ~= "number" or w <= 0 then w = #text * 7 end
+  return w
+end
+
+local function paint(tex, c)
+  tex:SetColorTexture(c[1], c[2], c[3], c[4] or 1)
+end
+
+-- Hover art for a button. Goes through SetHighlightTexture rather than a texture
+-- on the HIGHLIGHT layer, so the client shows it on mouseover and nowhere else.
+local function hoverTint(b, alpha)
+  b:SetHighlightTexture("Interface\\Buttons\\WHITE8X8")
+  local hl = b:GetHighlightTexture()
+  if hl and hl.SetVertexColor then hl:SetVertexColor(1, 1, 1, alpha) end
+end
 
 local function checkbox(parent, label, get, set)
   local cb = CreateFrame("CheckButton", nil, parent)
@@ -37,19 +67,60 @@ end
 
 local function editbox(parent, w, multiline)
   local e = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
-  e:SetSize(w or 200, multiline and 90 or 22)
+  e:SetSize(w or 200, multiline and 44 or 22)
   e:SetAutoFocus(false)
   e:SetMultiLine(multiline and true or false)
   e:SetFontObject("ChatFontNormal")
   return e
 end
 
+-- A heading with a hairline under it, used above each block of related rows on
+-- a tab page and above each block of controls on the Profiles page.
+local function heading(parent, text, x, y, width)
+  local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  fs:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+  fs:SetText(GOLD .. text .. ENDC)
+  local line = parent:CreateTexture(nil, "ARTWORK")
+  line:SetHeight(1)
+  paint(line, { 1, 1, 1, 0.10 })
+  line:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y - 16)
+  line:SetPoint("TOPRIGHT", parent, "TOPLEFT", x + (width or 460), y - 16)
+  return fs
+end
+
 -- ── Settings sub-page (horizontal tabs) ──────────────────────────────────────
+
+-- One clickable tab. Drawn rather than templated: the stock tab art is sized
+-- for Blizzard's own frames and does not sit flush inside a settings canvas.
+local function tabButton(parent, text)
+  local t = CreateFrame("Button", nil, parent)
+  t.bg = t:CreateTexture(nil, "BACKGROUND")
+  t.bg:SetAllPoints()
+  hoverTint(t, 0.08)
+  -- Sits on the strip's baseline, so the active tab reads as joined to the page.
+  t.underline = t:CreateTexture(nil, "OVERLAY")
+  t.underline:SetHeight(2)
+  t.underline:SetPoint("BOTTOMLEFT")
+  t.underline:SetPoint("BOTTOMRIGHT")
+  paint(t.underline, { C_GOLD[1], C_GOLD[2], C_GOLD[3], 1 })
+  t.label = t:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  t.label:SetPoint("CENTER")
+  t.label:SetText(text)
+  t:SetSize(textWidth(t.label, text) + 28, TAB_H)
+  t.setActive = function(on)
+    paint(t.bg, on and C_TAB_ON or C_TAB_OFF)
+    t.underline:SetShown(on)
+    local c = on and C_GOLD or C_DIM
+    t.label:SetTextColor(c[1], c[2], c[3])
+  end
+  return t
+end
 
 local function buildSettings()
   local panel = CreateFrame("Frame")
   panel.name = "Settings"
 
+  -- Group rows by tab, and inside a tab by section, both in declaration order.
   local order, byGroup = {}, {}
   for _, o in ipairs(ns.OPTIONS) do
     if not byGroup[o.group] then byGroup[o.group] = {}; order[#order + 1] = o.group end
@@ -59,38 +130,46 @@ local function buildSettings()
   panel.tabs, panel.pages = {}, {}
   local function select(group)
     for g, page in pairs(panel.pages) do page:SetShown(g == group) end
-    for g, tab in pairs(panel.tabs) do
-      if g == group then tab.label:SetTextColor(0.88, 0.65, 0.31) else tab.label:SetTextColor(0.7, 0.7, 0.7) end
-    end
+    for g, tab in pairs(panel.tabs) do tab.setActive(g == group) end
     panel.selected = group
   end
   panel.select = select
 
+  -- The strip's baseline, which every tab's underline sits on.
+  local strip = panel:CreateTexture(nil, "ARTWORK")
+  strip:SetHeight(1)
+  paint(strip, { 1, 1, 1, 0.12 })
+  strip:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, STRIP_Y - TAB_H)
+  strip:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -16, STRIP_Y - TAB_H)
+
   local x = 16
   for _, g in ipairs(order) do
-    local w = #g * 8 + 22
-    local tab = CreateFrame("Button", nil, panel)
-    tab:SetSize(w, 26)
-    tab:SetPoint("TOPLEFT", panel, "TOPLEFT", x, -16)
-    tab.label = tab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    tab.label:SetPoint("CENTER")
-    tab.label:SetText(g)
+    local tab = tabButton(panel, g)
+    tab:SetPoint("TOPLEFT", panel, "TOPLEFT", x, STRIP_Y)
     tab:SetScript("OnClick", function() select(g) end)
     panel.tabs[g] = tab
-    x = x + w + 6
+    x = x + tab:GetWidth() + TAB_GAP
 
     local page = CreateFrame("Frame", nil, panel)
-    page:SetPoint("TOPLEFT", panel, "TOPLEFT", 24, -56)
+    page:SetPoint("TOPLEFT", panel, "TOPLEFT", 24, CONTENT_Y)
     page:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -16, 16)
     page:Hide()
     page.checks = {}
-    local yy = 0
+    page.sections = {}
+    local yy, lastSection = 0, nil
     for _, o in ipairs(byGroup[g]) do
+      local sec = o.section or g
+      if sec ~= lastSection then
+        if lastSection then yy = yy - SECTION_GAP end
+        page.sections[#page.sections + 1] = heading(page, sec, 0, yy, 440)
+        lastSection = sec
+        yy = yy - 26
+      end
       local cb = checkbox(page, o.label,
         function() return cfg(o.key) end,
         function(v) setCfg(o.key, v); local ch = ns.optionChanged[o.key]; if ch then pcall(ch) end end)
       cb:SetPoint("TOPLEFT", page, "TOPLEFT", 0, yy)
-      yy = yy - 28
+      yy = yy - ROW_H
       page.checks[o.key] = cb
     end
     panel.pages[g] = page
@@ -108,6 +187,23 @@ end
 
 -- ── Profiles sub-page ────────────────────────────────────────────────────────
 
+-- A flat list row, so the profile list doesn't read as a stack of action
+-- buttons. The active one is called out in gold.
+local function profileRow(parent)
+  local r = CreateFrame("Button", nil, parent)
+  r:SetSize(206, 22)
+  r.bg = r:CreateTexture(nil, "BACKGROUND")
+  r.bg:SetAllPoints()
+  hoverTint(r, 0.10)
+  r.label = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  r.label:SetPoint("LEFT", r, "LEFT", 8, 0)
+  r.label:SetJustifyH("LEFT")
+  r.tag = r:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  r.tag:SetPoint("RIGHT", r, "RIGHT", -8, 0)
+  r.tag:SetJustifyH("RIGHT")
+  return r
+end
+
 local function buildProfiles()
   local panel = CreateFrame("Frame")
   panel.name = "Profiles"
@@ -119,52 +215,75 @@ local function buildProfiles()
   panel.current = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   panel.current:SetPoint("TOPLEFT", 16, -42)
 
-  -- A load button per profile, pooled and rebuilt whenever the set changes.
+  heading(panel, "Your profiles", 16, -76, 230)
+  heading(panel, "Create", 266, -76, 220)
+  heading(panel, "This profile", 266, -162, 220)
+  heading(panel, "Move settings between characters", 16, -262, 470)
+
+  -- A framed well for the list, so the rows read as one control.
+  local well = CreateFrame("Frame", nil, panel, "BackdropTemplate")
+  well:SetSize(230, 150)
+  well:SetPoint("TOPLEFT", 16, -98)
+  if well.SetBackdrop then
+    well:SetBackdrop({
+      bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+      edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+      tile = true, tileSize = 16, edgeSize = 12,
+      insets = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    well:SetBackdropColor(0, 0, 0, 0.45)
+    well:SetBackdropBorderColor(0.35, 0.3, 0.2, 0.9)
+  end
+
+  -- One row per profile, pooled and rebuilt whenever the set changes.
   panel.rows = {}
   local function rebuildList()
     for _, r in ipairs(panel.rows) do r:Hide() end
-    local names, y = ns.profileNames(), -70
+    local names, y = ns.profileNames(), -8
+    local active, main = ns.activeProfile(), ns.mainProfile()
     for i, name in ipairs(names) do
       local r = panel.rows[i]
-      if not r then r = button(panel, "", 200, nil); panel.rows[i] = r end
+      if not r then r = profileRow(well); panel.rows[i] = r end
       r.profile = name
-      r:SetText((name == ns.activeProfile() and "> " or "") .. name
-        .. (name == ns.mainProfile() and "  (main)" or ""))
+      local isActive = name == active
+      r.label:SetText(isActive and (GOLD .. name .. ENDC) or (WHITE .. name .. ENDC))
+      r.tag:SetText(name == main and (GREY .. "main" .. ENDC) or "")
+      paint(r.bg, isActive and { C_GOLD[1], C_GOLD[2], C_GOLD[3], 0.18 } or { 1, 1, 1, 0 })
       r:SetScript("OnClick", function() ns.loadProfile(r.profile) end)
       r:ClearAllPoints()
-      r:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, y)
+      r:SetPoint("TOPLEFT", well, "TOPLEFT", 10, y)
       r:Show()
-      y = y - 26
+      y = y - 24
     end
   end
 
-  local newBox = editbox(panel, 160)
-  newBox:SetPoint("TOPLEFT", 240, -70)
-  button(panel, "New profile", 110, function()
+  local newBox = editbox(panel, 180)
+  newBox:SetPoint("TOPLEFT", 266, -100)
+  button(panel, "New profile", 120, function()
     local name = newBox:GetText()
     if name and name ~= "" then ns.createProfile(name); newBox:SetText("") end
-  end):SetPoint("TOPLEFT", 240, -98)
+  end):SetPoint("TOPLEFT", 266, -128)
 
-  button(panel, "Reset", 110, function() ns.resetProfile() end):SetPoint("TOPLEFT", 240, -132)
-  button(panel, "Set as main", 110, function() ns.setMainProfile(ns.activeProfile()) end):SetPoint("TOPLEFT", 240, -160)
+  button(panel, "Reset", 110, function() ns.resetProfile() end):SetPoint("TOPLEFT", 266, -186)
+  button(panel, "Set as main", 116, function() ns.setMainProfile(ns.activeProfile()) end):SetPoint("TOPLEFT", 382, -186)
   panel.deleteBtn = button(panel, "Delete", 110, function() ns.deleteProfile(ns.activeProfile()) end)
-  panel.deleteBtn:SetPoint("TOPLEFT", 240, -188)
+  panel.deleteBtn:SetPoint("TOPLEFT", 266, -212)
 
-  local exportLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  exportLabel:SetPoint("TOPLEFT", 16, -240)
-  exportLabel:SetText(GREY .. "Export (copy this):" .. ENDC)
-  panel.exportBox = editbox(panel, 360, true)
-  panel.exportBox:SetPoint("TOPLEFT", 16, -260)
+  local exportLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  exportLabel:SetPoint("TOPLEFT", 16, -286)
+  exportLabel:SetText(GREY .. "Export this profile - select the text and copy it:" .. ENDC)
+  panel.exportBox = editbox(panel, 470, true)
+  panel.exportBox:SetPoint("TOPLEFT", 16, -304)
 
-  local importLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  local importLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   importLabel:SetPoint("TOPLEFT", 16, -360)
-  importLabel:SetText(GREY .. "Import (paste, then Import):" .. ENDC)
-  panel.importBox = editbox(panel, 360, true)
-  panel.importBox:SetPoint("TOPLEFT", 16, -380)
+  importLabel:SetText(GREY .. "Import - paste a profile string here, then Import:" .. ENDC)
+  panel.importBox = editbox(panel, 470, true)
+  panel.importBox:SetPoint("TOPLEFT", 16, -378)
   button(panel, "Import", 110, function()
     local s = panel.importBox:GetText()
     if s and s ~= "" and ns.importProfile(s) then panel.importBox:SetText("") end
-  end):SetPoint("TOPLEFT", 16, -480)
+  end):SetPoint("TOPLEFT", 16, -430)
 
   panel.refresh = function()
     panel.current:SetText(WHITE .. "Active: " .. ENDC .. GOLD .. ns.activeProfile() .. ENDC)

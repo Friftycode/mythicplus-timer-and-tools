@@ -63,23 +63,24 @@ local DEFAULTS = {
 ns.DEFAULTS = DEFAULTS
 
 -- One row per user-facing option; drives both the settings panel and /mpt.
--- Rows in the same `group` must stay adjacent (the panel opens a section per
--- group change).
+-- Rows in the same `group` must stay adjacent (the flat panel opens a section
+-- per group change), and within a group the same is true of `section`, which
+-- the tabbed panel turns into a heading above the rows it covers.
 ns.OPTIONS = {
-  { key = "mythicplustimer", group = "Run overlay", label = "M+ run timer overlay", tooltip = "Show a movable overlay during an active Mythic+ run: time remaining, the +2/+3 upgrade windows, enemy forces, bosses, and deaths." },
-  { key = "autonameplates", group = "Run overlay", label = "Enable enemy nameplates in keys", tooltip = "Turn on enemy nameplates at the start of a Mythic+ key, then restore your setting when the key ends." },
-  { key = "letmefocus", group = "Run overlay", label = "Let me focus", tooltip = "Click the clock or the deaths on the overlay to hide them. Click again to bring them back." },
-  { key = "guildkeys", group = "Mythic+ window", label = "Guild keys this week", tooltip = "Show your guild's best keys for the current week inside the Mythic+ Dungeons window." },
-  { key = "autoslotkey", group = "Mythic+ window", label = "Auto-slot your keystone", tooltip = "Place your keystone automatically when the Font of Power is opened." },
-  { key = "seasontp", group = "Mythic+ window", label = "Teleport from Season Best icons", tooltip = "Click a dungeon under Season Best in the Mythic+ Dungeons window to teleport there." },
-  { key = "chatlinks", group = "Chat", label = "Clickable links in chat", tooltip = "Turn web addresses in chat into a link. Click one to copy it." },
-  { key = "chatcopy", group = "Chat", label = "Copy button on the chat window", tooltip = "Add a Copy button to each chat window. It opens that window's text in a box you can select and copy." },
-  { key = "joinpopup", group = "Alerts", label = "Show which key you joined", tooltip = "When you join a group through the Group Finder, show the dungeon you were accepted into, with a teleport button when you have one." },
-  { key = "bloodlust", group = "Alerts", label = "Alert when bloodlust is called", tooltip = "Show a short on-screen alert when someone in your group types bl, hero, lust, drums, or the like." },
-  { key = "showaffixes", group = "Display", label = "Show affixes", tooltip = "Draw this week's affix icons on the overlay." },
-  { key = "showforces", group = "Display", label = "Show enemy forces", tooltip = "Draw the enemy forces percentage on the overlay." },
-  { key = "showbosses", group = "Display", label = "Show bosses", tooltip = "Draw the bosses section on the overlay." },
-  { key = "showdeaths", group = "Display", label = "Show deaths", tooltip = "Draw the deaths section on the overlay." },
+  { key = "mythicplustimer", group = "Run overlay", section = "The overlay", label = "M+ run timer overlay", tooltip = "Show a movable overlay during an active Mythic+ run: time remaining, the +2/+3 upgrade windows, enemy forces, bosses, and deaths." },
+  { key = "letmefocus", group = "Run overlay", section = "The overlay", label = "Let me focus", tooltip = "Click the clock or the deaths on the overlay to hide them. Click again to bring them back." },
+  { key = "autonameplates", group = "Run overlay", section = "While a key is running", label = "Enable enemy nameplates in keys", tooltip = "Turn on enemy nameplates at the start of a Mythic+ key, then restore your setting when the key ends." },
+  { key = "autoslotkey", group = "Mythic+ window", section = "Your keystone", label = "Auto-slot your keystone", tooltip = "Place your keystone automatically when the Font of Power is opened." },
+  { key = "guildkeys", group = "Mythic+ window", section = "Dungeon list", label = "Guild keys this week", tooltip = "Show your guild's best keys for the current week inside the Mythic+ Dungeons window." },
+  { key = "seasontp", group = "Mythic+ window", section = "Dungeon list", label = "Teleport from Season Best icons", tooltip = "Click a dungeon under Season Best in the Mythic+ Dungeons window to teleport there." },
+  { key = "chatlinks", group = "Chat", section = "Links", label = "Clickable links in chat", tooltip = "Turn web addresses in chat into a link. Click one to copy it." },
+  { key = "chatcopy", group = "Chat", section = "Copying", label = "Copy button on the chat window", tooltip = "Add a Copy button to each chat window. It opens that window's text in a box you can select and copy." },
+  { key = "joinpopup", group = "Alerts", section = "Group finder", label = "Show which key you joined", tooltip = "When you join a group through the Group Finder, show the dungeon you were accepted into, with a teleport button when you have one." },
+  { key = "bloodlust", group = "Alerts", section = "Group chat", label = "Alert when bloodlust is called", tooltip = "Show a short on-screen alert when someone in your group types bl, hero, lust, drums, or the like." },
+  { key = "showaffixes", group = "Display", section = "Overlay blocks", label = "Show affixes", tooltip = "Draw this week's affix icons on the overlay." },
+  { key = "showforces", group = "Display", section = "Overlay blocks", label = "Show enemy forces", tooltip = "Draw the enemy forces percentage on the overlay." },
+  { key = "showbosses", group = "Display", section = "Overlay blocks", label = "Show bosses", tooltip = "Draw the bosses section on the overlay." },
+  { key = "showdeaths", group = "Display", section = "Overlay blocks", label = "Show deaths", tooltip = "Draw the deaths section on the overlay." },
 }
 
 -- ── Profiles ─────────────────────────────────────────────────────────────

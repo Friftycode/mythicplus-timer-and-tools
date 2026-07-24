@@ -335,9 +335,28 @@ C_PlayerInfo = {
     return x and x.score and { currentSeasonScore = x.score } or nil
   end,
 }
-C_PaperDollInfo = { GetInspectItemLevel = function(u) return (Mock.units[u] or {}).ilvl or 0 end }
+-- The inspect API reports 0 for yourself, exactly as the live one does; your own
+-- gear is read from the character sheet instead.
+C_PaperDollInfo = {
+  GetInspectItemLevel = function(u)
+    if u == "player" then return 0 end
+    return (Mock.units[u] or {}).ilvl or 0
+  end,
+}
+function GetAverageItemLevel()
+  local il = (Mock.units.player or {}).ilvl or 0
+  return il, il
+end
+function CanInspect(u) return Mock.state.canInspect ~= false and Mock.units[u] ~= nil end
+-- Records who was asked about, so a test can answer with INSPECT_READY itself.
+function NotifyInspect(u) Mock.state.inspected = (Mock.units[u] or {}).guid end
+function ClearInspectPlayer() Mock.state.inspected = nil end
 function UnitExists(u) return Mock.units[u] ~= nil end
 function UnitGUID(u) return (Mock.units[u] or {}).guid end
+function UnitIsUnit(a, b)
+  local ua, ub = Mock.units[a], Mock.units[b]
+  return ua ~= nil and ub ~= nil and ua.guid == ub.guid
+end
 function UnitName(u) return (Mock.units[u] or {}).name end
 function UnitClassBase(u) return (Mock.units[u] or {}).class end
 function UnitIsDeadOrGhost(u) return Mock.state.dead[u] and true or false end

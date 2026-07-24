@@ -54,6 +54,20 @@ ok(#Mock.settings.headers == 6,
   "six sections drawn, got " .. #Mock.settings.headers)
 ok(seenHeader["Test frames"], "the test frames have their own section heading")
 
+-- Each row also names the sub-heading it sits under on the tabbed page. Rows
+-- sharing one have to stay adjacent, or that heading would be drawn twice.
+local seenSection, sectionDupes, lastSection = {}, 0, nil
+for _, o in ipairs(MythicPlusTimerNamespace.OPTIONS) do
+  ok(o.section ~= nil, "option '" .. o.key .. "' declares a sub-heading")
+  local id = tostring(o.group) .. "/" .. tostring(o.section)
+  if id ~= lastSection then
+    if seenSection[id] then sectionDupes = sectionDupes + 1 end
+    seenSection[id] = true
+    lastSection = id
+  end
+end
+ok(sectionDupes == 0, "no sub-heading is opened twice")
+
 ok(SlashCmdList.MYTHICPLUSTIMER ~= nil, "/mpt slash command registered")
 ok(#Mock.prints == 0, "login prints nothing (no data bundle to report)")
 
@@ -446,6 +460,22 @@ ok(popup().dungeonName == "Algeth'ar Academy", "the plain dungeon name is kept f
 -- matched through the spell's description rather than a hardcoded spell id.
 ok(popup().tp:IsShown(), "a teleport button appears when the character owns one")
 ok(popup().tp.spellName == "Path of the Scholar", "the right teleport is armed")
+-- The icon alone says nothing about where it sends you, so it is captioned.
+ok(popup().tpLabel:IsShown(), "the teleport icon is labelled")
+has(pj, "Teleport to", "and the caption says what clicking it does")
+
+-- Column headings, and every value under its own heading. Both are laid out
+-- from one table, so this catches the two drifting apart.
+has(pj, "member", "the roster heads its name column")
+has(pj, "ilvl", "and its item level column")
+has(pj, "score", "and its score column")
+for _, col in ipairs({ "name", "ilvl", "score" }) do
+  local headX = select(4, popup().partyCols[col]:GetPoint())
+  local rowX = select(4, popup().partyRows[1][col]:GetPoint())
+  ok(headX == rowX,
+    "the " .. col .. " heading sits over its column (" .. tostring(headX)
+      .. " vs " .. tostring(rowX) .. ")")
+end
 
 -- Leaving the group drops a popup that no longer describes anything.
 Mock.fire("GROUP_LEFT")
@@ -474,6 +504,17 @@ Mock.activities[1301].fullName = "Skyreach (Mythic Keystone)"
 Mock.fire("LFG_LIST_JOINED_GROUP", 77)
 ok(popup().tp.spellName == "Teleport: Skyreach", "a non-flyout teleport is matched by name")
 Mock.activities[1301].fullName = "Algeth'ar Academy (Mythic Keystone)"
+Mock.fire("GROUP_LEFT")
+
+-- A member's item level is only knowable through a completed inspect, which is
+-- why the column starts empty: the popup asks, then fills it in on the answer.
+Mock.fire("LFG_LIST_JOINED_GROUP", 77)
+ok(Mock.state.inspected ~= nil, "the popup asks the client to inspect a member")
+hasNot(Mock.rendered(popup()), "502", "a member's item level is absent before the inspect lands")
+Mock.units.party1.ilvl = 502
+Mock.fire("INSPECT_READY", Mock.units.party1.guid)
+has(Mock.rendered(popup()), "502", "and appears once the client answers")
+Mock.units.party1.ilvl = nil
 Mock.fire("GROUP_LEFT")
 
 -- ── Teleport from the Season Best icons ───────────────────────────────────
