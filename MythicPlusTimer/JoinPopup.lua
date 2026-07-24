@@ -9,16 +9,16 @@ local jpFindTeleport = ns.findTeleport
 -- activity table) and its party. There's no API field for the key level (the
 -- leader types it into the title), so the title is shown verbatim, never parsed.
 
--- Wide enough for a cross-realm name in the roster and a leader line like
--- "Бомжнадх-СвежевательДуш" without it running under the close button.
+-- Wide enough for a cross-realm leader name without it running under the close
+-- button.
 local JP_W = 320
 local jpFrame
 local jpTeleport   -- { spellID, name, icon } for this dungeon, or nil
 
 local JP_UNITS = { "player", "party1", "party2", "party3", "party4" }
 
--- Roster columns. The header and every row are laid out from these, so the
--- numbers stay under their own heading whatever the values are.
+-- Both the headings and the rows are laid out from this, so a value cannot
+-- drift out from under its own column.
 local JP_COL = {
   name  = { x = MP_PAD,       w = 150, justify = "LEFT" },
   ilvl  = { x = MP_PAD + 150, w = 60,  justify = "CENTER" },
@@ -45,8 +45,8 @@ local function jpGUID(unit)
   return ok and g or nil
 end
 
--- Mythic+ score for a unit, straight from the client's own rating summary (it
--- works for group members without an inspect). nil when there is none to show.
+-- nil when the client has no rating loaded for that unit, which is most of the
+-- group until everyone is close enough to inspect.
 local function jpScore(unit)
   if not (C_PlayerInfo and C_PlayerInfo.GetPlayerMythicPlusRatingSummary) then return nil end
   local ok, s = pcall(C_PlayerInfo.GetPlayerMythicPlusRatingSummary, unit)
@@ -54,9 +54,8 @@ local function jpScore(unit)
   return nil
 end
 
--- Average item level. Your own comes from the character sheet, because the
--- inspect API answers 0 for yourself. Everyone else needs an inspect the client
--- has actually completed, so their number arrives later (see jpRequestInspect).
+-- Your own comes from the character sheet, because the inspect API answers 0 for
+-- yourself. Everyone else needs a completed inspect (see jpRequestInspect).
 local function jpIlvl(unit)
   if jpIsSelf(unit) then
     if type(GetAverageItemLevel) ~= "function" then return nil end
@@ -72,10 +71,9 @@ local function jpIlvl(unit)
   return nil
 end
 
--- The client answers one inspect at a time, and only for someone close enough
--- to inspect at all. Ask about the first member we still have no number for;
--- the rest follow as each INSPECT_READY lands. Right after joining a group
--- nobody is in range yet, which is why the column starts out empty.
+-- The client answers one inspect at a time, and only for someone in range. Ask
+-- about the first member we have no number for; the rest follow as each
+-- INSPECT_READY lands. Nobody is in range the instant you join a group.
 local function jpRequestInspect()
   if jpInspectGUID or type(NotifyInspect) ~= "function" then return end
   if InCombatLockdown and InCombatLockdown() then return end
@@ -94,8 +92,7 @@ local function jpRequestInspect()
   end
 end
 
--- Files the item level an inspect just produced, then moves on to the next
--- member. Returns true when something new was learned and the roster is stale.
+-- Returns true when this taught us something, so the caller knows to redraw.
 local function jpInspectReady(guid)
   local learned = false
   if guid and C_PaperDollInfo and C_PaperDollInfo.GetInspectItemLevel then
@@ -116,8 +113,7 @@ local function jpInspectReady(guid)
   return learned
 end
 
--- Draws one row per present party unit (name, item level, M+ score) and returns
--- the count, so the popup can size itself to the group.
+-- Returns the row count, so the popup can size itself to the group.
 local function jpRenderParty(f)
   for _, row in ipairs(f.partyRows) do row.name:Hide(); row.ilvl:Hide(); row.score:Hide() end
   local n = 0
@@ -145,12 +141,9 @@ local function jpRenderParty(f)
       row.name:SetText(ns.classColoredName(name, (okC and type(cl) == "string") and cl or nil))
       local il = jpIlvl(unit)
       row.ilvl:SetText(il and (WHITE .. il .. ENDC) or (GREY .. "-" .. ENDC))
-      -- The client only volunteers a score for someone it has data for, which
-      -- usually means nobody but you until the group gathers. The listing's
-      -- leader score is the one exception, so fall back to it for that row.
-      -- A zero counts as "nothing known" for the leader: the client reports 0
-      -- for someone it has no rating loaded for, and the listing's own number
-      -- is the better answer whenever we have it.
+      -- The listing carries the leader's score, and is the only source that
+      -- needs no inspect. A zero from the client means "not loaded", not "no
+      -- rating", so it loses to the listing too.
       local sc = jpScore(unit)
       if (not sc or sc == 0) and jpLeader and jpLeader.score and name == jpLeader.name then
         sc = jpLeader.score
@@ -209,12 +202,9 @@ local function ensureJoinFrame()
   f.leader:SetWidth(JP_W - MP_PAD * 2)
   f.leader:SetJustifyH("LEFT")
 
-  -- Party roster: name, item level, M+ score.
   f.partyHeader = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   f.partyHeader:SetPoint("TOPLEFT", f, "TOPLEFT", MP_PAD, -MP_PAD - 74)
   f.partyHeader:SetText(GOLD .. "Party" .. ENDC)
-  -- Column headings, laid out from the same table as the rows so a number is
-  -- always centred under its own title.
   f.partyCols = {}
   for col, text in pairs({ name = "member", ilvl = "ilvl", score = "score" }) do
     local c = JP_COL[col]
@@ -239,8 +229,7 @@ local function ensureJoinFrame()
   f.tp:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -MP_PAD, MP_PAD)
   f.tp:RegisterForClicks("AnyUp", "AnyDown")
   f.tp:SetAttribute("type", "spell")
-  -- A gold edge under the icon, so it reads as a button rather than as one more
-  -- decorative dungeon portrait sitting in the corner.
+  -- A gold edge, so the icon reads as a button and not as decoration.
   f.tp.border = f.tp:CreateTexture(nil, "BACKGROUND")
   f.tp.border:SetPoint("TOPLEFT", f.tp, "TOPLEFT", -2, 2)
   f.tp.border:SetPoint("BOTTOMRIGHT", f.tp, "BOTTOMRIGHT", 2, -2)
@@ -248,7 +237,6 @@ local function ensureJoinFrame()
   f.tp.icon = f.tp:CreateTexture(nil, "ARTWORK")
   f.tp.icon:SetAllPoints()
   f.tp.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-  -- Hover art via the button's own highlight slot, so it only shows on mouseover.
   f.tp:SetHighlightTexture("Interface\\Buttons\\WHITE8X8")
   local tpHL = f.tp:GetHighlightTexture()
   if tpHL and tpHL.SetVertexColor then tpHL:SetVertexColor(1, 1, 1, 0.22) end
@@ -263,8 +251,7 @@ local function ensureJoinFrame()
   f.tp:SetScript("OnLeave", function() GameTooltip:Hide() end)
   f.tp:Hide()
 
-  -- Names what the icon does, right beside it. On its own the portrait gives no
-  -- clue that it is clickable, or where it sends you.
+  -- The portrait alone gives no clue that it is clickable, or where it sends you.
   f.tpLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   f.tpLabel:SetPoint("BOTTOMRIGHT", f.tp, "BOTTOMLEFT", -8, 3)
   f.tpLabel:SetWidth(JP_W - MP_PAD * 2 - 52)
@@ -281,8 +268,7 @@ local function ensureJoinFrame()
   return f
 end
 
--- Redraws the roster and sizes the popup to it: room for the rows plus a bottom
--- strip for the teleport button and its label.
+-- Sizes to the rows plus a bottom strip for the teleport button and its label.
 local function jpRedrawParty(f)
   local rows = jpRenderParty(f)
   f:SetHeight(MP_PAD + 102 + math.max(1, rows) * 15 + 48)
@@ -323,8 +309,6 @@ local function renderJoinFrame(dungeon, listingTitle, leaderName, leaderScore)
   f.tpNote:SetText(note and (GREY .. note .. ENDC) or "")
   jpRedrawParty(f)
   f:Show()
-  -- Nobody is in inspect range the instant you join, so this usually only
-  -- starts paying off once the group gathers.
   jpRequestInspect()
 end
 
@@ -348,9 +332,8 @@ local function onJoinedGroup(searchResultID)
   if not dungeon or dungeon == "" then return end
   local leader = (type(info.leaderName) == "string" and not isSecret(info.leaderName)) and info.leaderName or nil
   local title = (type(info.name) == "string" and not isSecret(info.name)) and info.name or nil
-  -- The listing's own copy of the leader's overall score. Unlike every other
-  -- member's, this needs no inspect and no proximity. Like the names, it can
-  -- come back as a secret value, so it goes through the same check.
+  -- The one rating available with no inspect and no proximity. Like the names,
+  -- it can come back as a secret value.
   local leaderScore = info.leaderOverallDungeonScore
   if not (type(leaderScore) == "number" and not isSecret(leaderScore)) then leaderScore = nil end
   renderJoinFrame(dungeon, title, leader, leaderScore)
@@ -371,15 +354,11 @@ joinEvents:SetScript("OnEvent", function(_, event, arg1)
   if event == "LFG_LIST_JOINED_GROUP" then
     pcall(onJoinedGroup, arg1)
   elseif event == "GROUP_ROSTER_UPDATE" then
-    -- People joining or leaving while the popup is up: redraw the roster and
-    -- re-size to it. Left alone when the popup isn't showing.
     if jpFrame and jpFrame:IsShown() then
       jpRedrawParty(jpFrame)
       jpRequestInspect()
     end
   elseif event == "INSPECT_READY" then
-    -- A member's gear finally came back. Only redraw when it told us something
-    -- we didn't already have.
     local learned = jpInspectReady(arg1)
     if learned and jpFrame and jpFrame:IsShown() then jpRedrawParty(jpFrame) end
   elseif event == "GROUP_LEFT" then

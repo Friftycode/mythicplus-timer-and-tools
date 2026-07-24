@@ -63,9 +63,8 @@ jobs:
           git tag -a "$TAG" -m "$TAG"
           git push origin "$TAG"
 
-      # Fallback path. CurseForge's repo integration normally packages the tag
-      # above on its own; this only runs if a CF_API_KEY secret exists, for when
-      # that integration is not set up. Running both would upload the file twice.
+      # Fallback for when CurseForge's repo integration is not set up. Skipped
+      # without a CF_API_KEY; running both would upload the file twice.
       - name: Upload to CurseForge directly
         if: ${{ env.CF_API_KEY != '' }}
         uses: BigWigsMods/packager@master

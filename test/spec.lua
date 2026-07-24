@@ -26,8 +26,7 @@ Mock.fire("PLAYER_LOGIN")
 
 ok(Mock.settings.category == "Mythic+ Timer and Tools", "settings category is 'Mythic+ Timer and Tools'")
 
--- Every option is drawn on the tabbed page, which is the only settings surface:
--- one checkbox each, on the tab its group names.
+-- The tabbed page is the only settings surface, so every option is drawn there.
 local settingsPages = MythicPlusTimerNamespace.panels.settings.pages
 local keys, boxCount = {}, 0
 for _, page in pairs(settingsPages) do
@@ -47,8 +46,7 @@ for _, o in ipairs(MythicPlusTimerNamespace.OPTIONS) do
     "option '" .. o.key .. "' is drawn on that tab")
 end
 
--- Each row also names the sub-heading it sits under on the tabbed page. Rows
--- sharing one have to stay adjacent, or that heading would be drawn twice.
+-- Rows sharing a sub-heading have to stay adjacent, or it is drawn twice.
 local seenSection, sectionDupes, lastSection = {}, 0, nil
 for _, o in ipairs(MythicPlusTimerNamespace.OPTIONS) do
   ok(o.section ~= nil, "option '" .. o.key .. "' declares a sub-heading")
@@ -499,8 +497,7 @@ ok(popup().tp.spellName == "Teleport: Skyreach", "a non-flyout teleport is match
 Mock.activities[1301].fullName = "Algeth'ar Academy (Mythic Keystone)"
 Mock.fire("GROUP_LEFT")
 
--- A member's item level is only knowable through a completed inspect, which is
--- why the column starts empty: the popup asks, then fills it in on the answer.
+-- A member's item level needs a completed inspect, so the column starts empty.
 Mock.fire("LFG_LIST_JOINED_GROUP", 77)
 ok(Mock.state.inspected ~= nil, "the popup asks the client to inspect a member")
 hasNot(Mock.rendered(popup()), "502", "a member's item level is absent before the inspect lands")
@@ -510,8 +507,7 @@ has(Mock.rendered(popup()), "502", "and appears once the client answers")
 Mock.units.party1.ilvl = nil
 Mock.fire("GROUP_LEFT")
 
--- The leader's score needs no inspect and no proximity: it rides along on the
--- listing. Matched on the short name, because LFG reports "Name-Realm".
+-- The leader's score rides along on the listing, so it needs no inspect.
 Mock.units.party3 = { name = "Keypusher", class = "WARRIOR", guid = "P-4" }
 Mock.fire("LFG_LIST_JOINED_GROUP", 77)
 has(Mock.rendered(popup()), "3105", "the leader's score comes straight from the listing")
@@ -570,10 +566,8 @@ local function chatLine(msg) return Mock.chat("CHAT_MSG_GUILD", msg) end
 
 ok(#(Mock.chatFilters.CHAT_MSG_GUILD or {}) == 1, "one chat filter is registered per channel")
 
--- Every filter has to hand back the whole argument list, not just the values it
--- reads. The client reassigns arg1..arg14 from a filter's return, so a short one
--- nils the language, flags and line id, and its own handler then errors on them.
--- CHAT_MSG_PARTY carries both of ours, which is where this first showed up.
+-- The client reassigns arg1..arg14 from a filter's return, so a filter that
+-- returns only what it reads nils the language, flags and line id.
 for _, ev in ipairs({ "CHAT_MSG_PARTY", "CHAT_MSG_SAY", "CHAT_MSG_GUILD" }) do
   Mock.chat(ev, "hello")
   local a = Mock.lastChatArgs
@@ -725,7 +719,6 @@ MythicPlusTimerNamespace.setCfg("bloodlust", true)
 -- Every movable frame only appears at its own moment, which is the worst time
 -- to be arranging a screen. One button puts them all up and takes them away.
 
--- It lives on the first tab, since the overlay is what people come here to move.
 local firstTab = MythicPlusTimerNamespace.OPTIONS[1].group
 local testBtn = MythicPlusTimerNamespace.panels.settings.pages[firstTab].buttons
   and MythicPlusTimerNamespace.panels.settings.pages[firstTab].buttons["Show or hide test frames"]
@@ -881,7 +874,7 @@ ok(panels and panels.settings and panels.profiles, "the Settings and Profiles su
 local subs = {}
 for _, s in ipairs(Mock.settings.subcategories or {}) do subs[s.name] = true end
 ok(subs["Settings"] and subs["Profiles"], "both sub-pages register under the addon category")
--- The addon's own name and the "Settings" entry under it are the same screen.
+-- The addon's name and the "Settings" entry under it are the same screen.
 ok(Mock.settings.canvas and Mock.settings.canvas.frame == panels.settings,
   "the addon's own category is the tabbed page")
 local settingsSub
@@ -892,7 +885,6 @@ ok(settingsSub and settingsSub.frame == panels.settingsSub,
   "the Settings sub-page is a tabbed page too")
 ok(panels.settingsSub ~= panels.settings,
   "and its own frame, since one frame cannot be in two categories")
--- Both carry the same tabs, so neither is a lesser version of the other.
 for g in pairs(panels.settings.pages) do
   ok(panels.settingsSub.pages[g] ~= nil, "the sub-page has the '" .. g .. "' tab as well")
 end
@@ -905,7 +897,6 @@ settings.select("Chat")
 ok(settings.pages["Chat"]:IsShown() and settings.pages["Mythic+ timer"]:IsShown() == false,
   "selecting a tab shows only that group's page")
 
--- Every tab says what it changes; a name on its own does not.
 for g in pairs(settings.tabs) do
   ok(ns.TAB_DESC[g] ~= nil, "tab '" .. g .. "' has a description")
   settings.select(g)
@@ -913,7 +904,6 @@ for g in pairs(settings.tabs) do
     "selecting '" .. g .. "' shows its description")
 end
 
--- The About tab: which version you are on, and where the addon lives.
 local about = settings.pages["About"]
 ok(about ~= nil and settings.tabs["About"] ~= nil, "there is an About tab")
 has(about.version:GetText(), "2026.7.24", "About names the installed version")
@@ -923,7 +913,7 @@ ok(about.curseforge:GetText() == "https://www.curseforge.com/wow/addons/mythic-t
   "About carries the CurseForge address")
 ok(about.github:GetText() == "https://github.com/Friftycode/mythicplus-timer-and-tools",
   "and the GitHub address")
--- Typing over a link puts it back, since an edit box cannot be made read-only.
+-- An edit box cannot be made read-only, so typing over a link puts it back.
 about.github:SetText("junk")
 about.github.__scripts.OnTextChanged(about.github)
 ok(about.github:GetText() == "https://github.com/Friftycode/mythicplus-timer-and-tools",
@@ -933,14 +923,12 @@ settings.select("Mythic+ timer")
 ns.setCfg("showbosses", true)
 settings.refresh()
 local cb = settings.pages["Mythic+ timer"].checks["showbosses"]
--- Each row carries its own explanation, reachable without leaving the tab.
 ok(cb.help ~= nil, "a row gets a help icon")
 cb.help.__scripts.OnEnter(cb.help)
 local helpTip = table.concat(GameTooltip.lines, "\n")
 has(helpTip, "Show bosses", "the help tooltip names the setting")
 has(helpTip, "Draw the bosses section",
   "hovering the help icon explains the setting")
--- The box itself explains too, so the icon is a hint rather than the only way in.
 cb.__scripts.OnEnter(cb)
 has(table.concat(GameTooltip.lines, "\n"), "Draw the bosses section",
   "hovering the checkbox explains it as well")

@@ -7,7 +7,7 @@ Mock = {
   frames = {},         -- every frame ever created
   prints = {},         -- captured print() output
   cvars = { nameplateShowEnemies = "0" },
-  settings = { category = nil, checkboxes = {}, buttons = {}, headers = {}, callbacks = {} },
+  settings = { category = nil },
 }
 
 time = os.time
@@ -395,8 +395,7 @@ Enum = {
   SpellBookSpellBank = { Player = 0 },
 }
 
--- Only the fields the About tab reads. Version is date-shaped, the way the
--- release job stamps it.
+-- Version is date-shaped, the way the release job stamps it.
 C_AddOns = {
   GetAddOnMetadata = function(_, field)
     local meta = { Version = "2026.7.24", Title = "Mythic+ Timer and Tools" }
@@ -406,56 +405,21 @@ C_AddOns = {
 
 Settings = {
   VarType = { Boolean = "boolean" },
-  -- The addon's own name in the AddOns list is a canvas page (the tabbed
-  -- settings), with the flat list and Profiles hanging off it.
+  -- The addon's name in the AddOns list, whose page is the tabbed settings frame.
   RegisterCanvasLayoutCategory = function(frame, name)
     Mock.settings.category = name
     Mock.settings.canvas = { name = name, frame = frame }
-    local cat = { name = name, ID = 1 }
-    cat.GetID = function(self) return self.ID end
-    return cat
-  end,
-  RegisterVerticalLayoutSubcategory = function(_, name)
-    Mock.settings.subcategories = Mock.settings.subcategories or {}
-    table.insert(Mock.settings.subcategories, { name = name })
-    local cat = { name = name, ID = 2 }
-    cat.GetID = function(self) return self.ID end
-    return cat, Settings.__layout
-  end,
-  RegisterVerticalLayoutCategory = function(name)
-    Mock.settings.category = name
     -- Shaped like the real category object: it carries an ID, and that ID (not
     -- the object) is what OpenToCategory accepts.
     local cat = { name = name, ID = 1 }
     cat.GetID = function(self) return self.ID end
-    return cat, Settings.__layout
+    return cat
   end,
-  -- Custom-frame sub-pages (the tabbed Settings and the Profiles page). We only
-  -- record their names and frames so tests can assert both were registered.
   RegisterCanvasLayoutSubcategory = function(_, frame, name)
     Mock.settings.subcategories = Mock.settings.subcategories or {}
     table.insert(Mock.settings.subcategories, { name = name, frame = frame })
-    return { name = name }, Settings.__layout
+    return { name = name }
   end,
-  RegisterAddOnSetting = function(_, id, key, _tbl, _type, label, _default)
-    local s = { id = id, key = key, label = label }
-    s.SetValueChangedCallback = function(self, fn) Mock.settings.callbacks[self.key] = fn end
-    return s
-  end,
-  CreateCheckbox = function(_, setting, tooltip)
-    table.insert(Mock.settings.checkboxes, { key = setting.key, label = setting.label, tooltip = tooltip })
-  end,
-  -- Headings and buttons are added to this layout as initializers; we only model
-  -- which of the two each one is, and the order.
-  __layout = {
-    AddInitializer = function(_, init)
-      if type(init) == "table" and init.header then
-        table.insert(Mock.settings.headers, init.header)
-      else
-        table.insert(Mock.settings.buttons, init)
-      end
-    end,
-  },
   RegisterAddOnCategory = function() end,
   -- Strict on purpose: the real client throws "bad argument #1 to
   -- 'OpenSettingsPanel'" when handed the category object instead of its id, and
@@ -467,12 +431,6 @@ Settings = {
     Mock.settings.opened = true
   end,
 }
-function CreateSettingsListSectionHeaderInitializer(name) return { header = name } end
--- Real signature: name, label, onButtonClick, description, addSearchTags.
-function CreateSettingsButtonInitializer(name, label, onClick, description)
-  return { name = name, label = label, run = onClick, description = description }
-end
-
 SlashCmdList = {}
 
 -- Blizzard_ChallengesUI: the Mythic+ Dungeons window the guild panel parks in.

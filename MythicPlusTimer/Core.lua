@@ -62,10 +62,9 @@ local DEFAULTS = {
 }
 ns.DEFAULTS = DEFAULTS
 
--- One row per user-facing option; drives both the settings panel and /mpt.
--- Rows in the same `group` must stay adjacent (the flat panel opens a section
--- per group change), and within a group the same is true of `section`, which
--- the tabbed panel turns into a heading above the rows it covers.
+-- One row per user-facing option. `group` is the tab it lands on and `section`
+-- the heading above it; rows sharing either must stay adjacent, or the heading
+-- would be drawn twice.
 ns.OPTIONS = {
   { key = "mythicplustimer", group = "Mythic+ timer", section = "The overlay", label = "M+ run timer overlay", tooltip = "Show a movable overlay during an active Mythic+ run: time remaining, the +2/+3 upgrade windows, enemy forces, bosses, and deaths." },
   { key = "letmefocus", group = "Mythic+ timer", section = "The overlay", label = "Let me focus", tooltip = "Click the clock or the deaths on the overlay to hide them. Click again to bring them back. Useful on a pull where the timer is a distraction." },
@@ -83,8 +82,7 @@ ns.OPTIONS = {
   { key = "bloodlust", group = "Alerts", section = "Group chat", label = "Alert when bloodlust is called", tooltip = "Show a short on-screen alert when someone in your group types bl, hero, lust, drums, or the like." },
 }
 
--- One line per tab, drawn under the tab strip. A tab name alone does not say
--- which part of the game it changes, and "Mythic+ window" said least of all.
+-- Drawn under the tab strip: a tab name alone does not say what it changes.
 ns.TAB_DESC = {
   ["Mythic+ timer"] = "The overlay during a run, what it shows, and what happens as a key starts.",
   ["Dungeons window"] = "What this addon adds inside Blizzard's own Mythic+ Dungeons window.",

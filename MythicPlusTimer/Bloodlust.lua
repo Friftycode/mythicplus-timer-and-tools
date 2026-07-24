@@ -118,10 +118,8 @@ local function blShowAlert(phrase, who)
   f:Show()
 end
 
--- Every return has to hand back the whole argument list, not just the two
--- values this cares about. The client reassigns arg1..arg14 from what a filter
--- returns, so a short return nils out the language, flags and line id, and its
--- own message handler then errors on them.
+-- The client reassigns arg1..arg14 from a filter's return, so returning only
+-- the values this reads nils the language and flags and breaks its own handler.
 local function blOnChat(_, _, msg, sender, ...)
   if not cfg("bloodlust") then return false, msg, sender, ... end
   if type(msg) ~= "string" or isSecret(msg) then return false, msg, sender, ... end

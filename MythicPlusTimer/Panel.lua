@@ -3,17 +3,13 @@ local _, ns = ...
 local GOLD, GREY, WHITE, ENDC = ns.GOLD, ns.GREY, ns.WHITE, ns.ENDC
 local cfg, setCfg = ns.cfg, ns.setCfg
 
--- Blizzard's own Settings panel stacks checkboxes vertically. To group them
--- under horizontal tabs instead, and to give profiles a home, we draw two of
--- our own frames and register them as sub-pages of the addon's Settings
--- category (the "+" in the AddOns list). Every control reads and writes through
--- cfg/setCfg, so this and the flat panel always agree.
+-- The addon's settings screen: horizontal tabs over Blizzard's vertical stack,
+-- and the Profiles page. Every control reads and writes through cfg/setCfg.
 
 local TAB_H, TAB_GAP, STRIP_Y = 26, 4, -14
 local DESC_Y, CONTENT_Y = -48, -74
 local ROW_H, SECTION_GAP = 26, 14
 
--- Tab and row colours, kept here so the two pages can't drift apart.
 local C_TAB_ON = { 0.24, 0.19, 0.10, 0.95 }
 local C_TAB_OFF = { 0.09, 0.09, 0.09, 0.75 }
 local C_GOLD = { 0.88, 0.65, 0.31 }
@@ -21,8 +17,7 @@ local C_DIM = { 0.62, 0.62, 0.62 }
 
 -- ── Controls ───────────────────────────────────────────────────────────────
 
--- GetStringWidth is only meaningful once a font is applied and the string has
--- been laid out; fall back to a per-character estimate so sizing never breaks.
+-- GetStringWidth reads 0 until the string has been laid out.
 local function textWidth(fs, text)
   local w = fs:GetStringWidth()
   if type(w) ~= "number" or w <= 0 then w = #text * 7 end
@@ -33,17 +28,14 @@ local function paint(tex, c)
   tex:SetColorTexture(c[1], c[2], c[3], c[4] or 1)
 end
 
--- Hover art for a button. Goes through SetHighlightTexture rather than a texture
--- on the HIGHLIGHT layer, so the client shows it on mouseover and nowhere else.
+-- SetHighlightTexture, not a texture on the HIGHLIGHT layer: only the former is
+-- shown on mouseover alone.
 local function hoverTint(b, alpha)
   b:SetHighlightTexture("Interface\\Buttons\\WHITE8X8")
   local hl = b:GetHighlightTexture()
   if hl and hl.SetVertexColor then hl:SetVertexColor(1, 1, 1, alpha) end
 end
 
--- Shows a row's own explanation on hover. Drawn as a "?" font string rather than
--- an art file, so there is nothing to break on a patch, and it carries the same
--- text the flat Blizzard panel puts in its tooltips.
 local function attachTooltip(frame, title, body)
   frame:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -83,7 +75,6 @@ local function checkbox(parent, label, get, set, tooltip)
   cb:SetScript("OnClick", function(self) set(self:GetChecked() and true or false) end)
   if tooltip and tooltip ~= "" then
     cb.help = helpIcon(parent, cb.label, label, tooltip)
-    -- The box itself explains too, so the "?" is a hint rather than the only way in.
     attachTooltip(cb, label, tooltip)
   end
   cb.refresh()
@@ -98,7 +89,6 @@ local function button(parent, label, w, onClick)
   return b
 end
 
--- A framed well, used behind the profile list and behind the multi-line boxes.
 local function well(parent, w, h)
   local f = CreateFrame("Frame", nil, parent, "BackdropTemplate")
   f:SetSize(w, h)
@@ -115,9 +105,8 @@ local function well(parent, w, h)
   return f
 end
 
--- InputBoxTemplate's art is drawn for one line of text. Stretched over a taller
--- box it spills past the edges, which is what made the export area look broken,
--- so a multi-line box gets a plain edit box inside a well we draw ourselves.
+-- InputBoxTemplate's art is drawn for one line and spills past a taller box, so
+-- multi-line gets a plain edit box inside a well instead.
 local function editbox(parent, w, multiline, height)
   if not multiline then
     local e = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
@@ -140,7 +129,6 @@ local function editbox(parent, w, multiline, height)
   return e
 end
 
--- Positions a control, or the well around it when it has one.
 local function place(widget, parent, x, y)
   local w = widget.container or widget
   w:ClearAllPoints()
@@ -148,8 +136,6 @@ local function place(widget, parent, x, y)
   return widget
 end
 
--- A heading with a hairline under it, used above each block of related rows on
--- a tab page and above each block of controls on the Profiles page.
 local function heading(parent, text, x, y, width)
   local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   fs:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
@@ -164,14 +150,14 @@ end
 
 -- ── Settings sub-page (horizontal tabs) ──────────────────────────────────────
 
--- One clickable tab. Drawn rather than templated: the stock tab art is sized
--- for Blizzard's own frames and does not sit flush inside a settings canvas.
+-- Drawn rather than templated: the stock tab art is sized for Blizzard's own
+-- frames and does not sit flush inside a settings canvas.
 local function tabButton(parent, text)
   local t = CreateFrame("Button", nil, parent)
   t.bg = t:CreateTexture(nil, "BACKGROUND")
   t.bg:SetAllPoints()
   hoverTint(t, 0.08)
-  -- Sits on the strip's baseline, so the active tab reads as joined to the page.
+  -- On the strip's baseline, so the active tab reads as joined to the page.
   t.underline = t:CreateTexture(nil, "OVERLAY")
   t.underline:SetHeight(2)
   t.underline:SetPoint("BOTTOMLEFT")
@@ -204,9 +190,8 @@ local function addonVersion()
   return nil
 end
 
--- Releases are stamped with the date they were cut ("2026.7.24", plus a counter
--- for a second release the same day), so the version string is also the date it
--- was last updated. Anything not in that shape gets no date rather than a guess.
+-- Releases are version-stamped with the date they were cut ("2026.7.24"), so the
+-- version doubles as the date. Any other shape gets no date rather than a guess.
 local MONTHS = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" }
 local function versionDate(v)
@@ -216,8 +201,7 @@ local function versionDate(v)
   return string.format("%d %s %s", d, MONTHS[m], y)
 end
 
--- A URL you can select and copy. There is no read-only edit box, so typing into
--- it just puts the address back.
+-- There is no read-only edit box, so typing into one puts the address back.
 local function urlBox(parent, url, x, y)
   local e = editbox(parent, 430)
   e:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
@@ -274,7 +258,6 @@ local function buildSettings()
   local panel = CreateFrame("Frame")
   panel.name = "Settings"
 
-  -- Group rows by tab, and inside a tab by section, both in declaration order.
   local order, byGroup = {}, {}
   for _, o in ipairs(ns.OPTIONS) do
     if not byGroup[o.group] then byGroup[o.group] = {}; order[#order + 1] = o.group end
@@ -283,7 +266,6 @@ local function buildSettings()
 
   panel.tabs, panel.pages = {}, {}
 
-  -- Says what the tab you are on actually changes.
   panel.desc = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   panel.desc:SetPoint("TOPLEFT", panel, "TOPLEFT", 24, DESC_Y)
   panel.desc:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -24, DESC_Y)
@@ -298,7 +280,6 @@ local function buildSettings()
   end
   panel.select = select
 
-  -- The strip's baseline, which every tab's underline sits on.
   local strip = panel:CreateTexture(nil, "ARTWORK")
   strip:SetHeight(1)
   paint(strip, { 1, 1, 1, 0.12 })
@@ -345,9 +326,8 @@ local function buildSettings()
     page.nextY = yy
   end
 
-  -- The one control that isn't a checkbox: it puts every movable frame on screen
-  -- at once so they can be dragged. It lives on the first tab, since the overlay
-  -- is the frame people come here to move.
+  -- Option buttons go on the first tab: the overlay is the frame people come
+  -- here to move, and there is nowhere else for a non-checkbox control to live.
   local firstPage = panel.pages[order[1]]
   if firstPage and #ns.optionButtons > 0 then
     local yy = (firstPage.nextY or 0) - SECTION_GAP
@@ -371,8 +351,8 @@ local function buildSettings()
       for _, cb in pairs(page.checks) do cb.refresh() end
     end
   end
-  -- There is more than one of these page (see ns.buildPanels), so each one
-  -- redraws as it is shown rather than trusting the other to have told it.
+  -- Two of these pages exist (see ns.buildPanels), so each redraws as it is
+  -- shown rather than trusting the other to have told it.
   panel:SetScript("OnShow", function() pcall(panel.refresh) end)
 
   select(order[1])
@@ -381,8 +361,7 @@ end
 
 -- ── Profiles sub-page ────────────────────────────────────────────────────────
 
--- A flat list row, so the profile list doesn't read as a stack of action
--- buttons. The active one is called out in gold.
+-- Flat, so the profile list doesn't read as a stack of action buttons.
 local function profileRow(parent)
   local r = CreateFrame("Button", nil, parent)
   r:SetSize(206, 22)
@@ -414,11 +393,10 @@ local function buildProfiles()
   heading(panel, "This profile", 266, -162, 220)
   heading(panel, "Move settings between characters", 16, -262, 470)
 
-  -- A framed well for the list, so the rows read as one control.
   local listWell = well(panel, 230, 150)
   listWell:SetPoint("TOPLEFT", 16, -98)
 
-  -- One row per profile, pooled and rebuilt whenever the set changes.
+  -- Rows are pooled: the set changes as profiles are created and deleted.
   panel.rows = {}
   local function rebuildList()
     for _, r in ipairs(panel.rows) do r:Hide() end
@@ -479,20 +457,18 @@ end
 
 -- ── Registration ─────────────────────────────────────────────────────────────
 
--- Builds both pages and returns them. Options.lua owns the registering, because
--- the tabbed page is the addon's own category rather than a sub-page of it, and
--- so has to exist before that category is created.
+-- Options.lua does the registering: the tabbed page is the addon's own category
+-- rather than a sub-page, so it has to exist before that category is created.
 function ns.buildPanels()
   if ns.panels then return ns.panels end
   local settings = buildSettings()
-  -- The addon's own entry in the AddOns list and the "Settings" sub-page under
-  -- it show the same thing, and one frame cannot be in two categories, so there
-  -- are two of these. Each redraws itself when shown, so they cannot disagree.
+  -- The addon's entry and the "Settings" sub-page under it show the same thing,
+  -- and one frame cannot be in two categories, so there are two of these.
   local settingsSub = buildSettings()
   local profiles = buildProfiles()
   ns.panels = { settings = settings, settingsSub = settingsSub, profiles = profiles }
-  -- Switching, creating, resetting or deleting a profile changes every value on
-  -- screen, so redraw both pages (and re-tick the overlay through its own hook).
+  -- A profile switch changes every value on screen, so redraw all three (and
+  -- re-tick the overlay through its own hook).
   local overlayHook = ns.onProfileChanged
   ns.onProfileChanged = function()
     if type(overlayHook) == "function" then pcall(overlayHook) end

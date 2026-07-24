@@ -7,15 +7,14 @@ local GREY, WHITE, ENDC = ns.GREY, ns.WHITE, ns.ENDC
 local cfg = ns.cfg
 
 -- ── Options panel ─────────────────────────────────────────────────────────
--- Data-driven from ns.OPTIONS, one checkbox per row under its group heading, via
--- the modern Settings API. pcall-guarded so an API change just drops the panel.
+-- pcall-guarded throughout, so an API change drops the panel rather than the
+-- addon.
 
 local ADDON_TITLE = "Mythic+ Timer and Tools"
 local settingsCategory
 
--- The addon's own name in the AddOns list, and the "Settings" entry under its
--- "+", are the same screen: the tabbed page. Nothing else is registered, so
--- there is no second settings surface that looks unlike the first.
+-- The addon's name in the AddOns list and the "Settings" entry under its "+"
+-- are the same screen, so there is only ever one settings surface.
 local function registerOptionsPanel()
   if not (Settings and Settings.RegisterAddOnCategory
     and Settings.RegisterCanvasLayoutCategory) then return end
