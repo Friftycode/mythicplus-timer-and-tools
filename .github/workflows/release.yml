@@ -79,3 +79,9 @@ jobs:
       - name: Upload to CurseForge
         if: ${{ env.CF_API_KEY != '' }}
         uses: BigWigsMods/packager@master
+        with:
+          # Label the CurseForge file "MythicPlusTimer-<version>.zip" to match the
+          # earlier manual uploads. The leading ":" leaves the zip filename at its
+          # default and overrides only the upload label; the in-zip addon folder
+          # (package-as) is untouched.
+          args: "-n :{package-name}-{project-version}.zip"
