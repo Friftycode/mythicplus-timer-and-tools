@@ -40,7 +40,7 @@ a WoW addon has none at runtime, and this one ships no data files at all.
 
 ## Install
 
-Copy the `MythicPlusTimer` folder into
+Copy the `MythicPlusTimerandTools` folder into
 `World of Warcraft/_retail_/Interface/AddOns`, then enable **Mythic+ Timer and Tools** in the
 AddOns list.
 
@@ -162,17 +162,17 @@ One file per feature. The `.toc` is the load order and the dependency order:
 
 | Path | Purpose |
 | --- | --- |
-| `MythicPlusTimer/MythicPlusTimer.toc` | Addon manifest and load order |
-| `MythicPlusTimer/Core.lua` | Palette, config, and the registries features declare themselves into |
-| `MythicPlusTimer/Timer.lua` | The M+ run overlay |
-| `MythicPlusTimer/GuildKeys.lua` | Guild keys this week |
-| `MythicPlusTimer/Keystone.lua` | Auto-slot your keystone |
-| `MythicPlusTimer/Teleports.lua` | Spellbook teleport lookup, and the Season Best click targets |
-| `MythicPlusTimer/JoinPopup.lua` | Which key did I just join |
-| `MythicPlusTimer/Chat.lua` | Clickable links, and copying a chat window |
-| `MythicPlusTimer/Bloodlust.lua` | Bloodlust called in chat |
-| `MythicPlusTimer/Options.lua` | Settings panel and `/mpt`, generated from the registries |
-| `MythicPlusTimer/Panel.lua` | Tabbed Settings sub-page and the Profiles page |
+| `MythicPlusTimerandTools/MythicPlusTimer.toc` | Addon manifest and load order |
+| `MythicPlusTimerandTools/Core.lua` | Palette, config, and the registries features declare themselves into |
+| `MythicPlusTimerandTools/Timer.lua` | The M+ run overlay |
+| `MythicPlusTimerandTools/GuildKeys.lua` | Guild keys this week |
+| `MythicPlusTimerandTools/Keystone.lua` | Auto-slot your keystone |
+| `MythicPlusTimerandTools/Teleports.lua` | Spellbook teleport lookup, and the Season Best click targets |
+| `MythicPlusTimerandTools/JoinPopup.lua` | Which key did I just join |
+| `MythicPlusTimerandTools/Chat.lua` | Clickable links, and copying a chat window |
+| `MythicPlusTimerandTools/Bloodlust.lua` | Bloodlust called in chat |
+| `MythicPlusTimerandTools/Options.lua` | Settings panel and `/mpt`, generated from the registries |
+| `MythicPlusTimerandTools/Panel.lua` | Tabbed Settings sub-page and the Profiles page |
 | `test/mockwow.lua` | Mock WoW client API |
 | `test/spec.lua` | Behavior tests |
 | `test/run.js` | Runner: luaparse syntax gate, then fengari |
@@ -184,10 +184,11 @@ One file per feature. The `.toc` is the load order and the dependency order:
 
 ## Releases
 
-CurseForge is linked to this repository and packages any **tagged commit** it
-sees (`.pkgmeta` names `MythicPlusTimer` as the addon folder and lists the
-repo scaffolding to leave out of the zip). So the deploy is just a tag; no API
-tokens or secrets are involved.
+The `monthly release` workflow builds the addon zip and uploads it to
+CurseForge with the BigWigsMods packager (`CF_API_KEY` secret), stamping the
+current retail Interface number and tagging the release along the way.
+`.pkgmeta` names `MythicPlusTimerandTools` as the addon folder and lists the
+repo scaffolding to leave out of the zip.
 
 - **CI** (`test.yml`) runs the test gate on every push and pull request.
 - **Monthly release** (`release.yml`) runs on the 1st of each month (and on

@@ -185,7 +185,7 @@ local GITHUB_URL = "https://github.com/Friftycode/mythicplus-timer-and-tools"
 local function addonVersion()
   local get = C_AddOns and C_AddOns.GetAddOnMetadata
   if type(get) ~= "function" then return nil end
-  local ok, v = pcall(get, "MythicPlusTimer", "Version")
+  local ok, v = pcall(get, "MythicPlusTimerandTools", "Version")
   if ok and type(v) == "string" and v ~= "" then return v end
   return nil
 end

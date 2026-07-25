@@ -7,8 +7,8 @@ const luaparse = require("luaparse");
 const { lua, lauxlib, lualib, to_jsstring } = require("fengari");
 
 const ROOT = path.join(__dirname, "..");
-const ADDON_DIR = path.join(ROOT, "MythicPlusTimer");
-const TOC = path.join(ADDON_DIR, "MythicPlusTimer.toc");
+const ADDON_DIR = path.join(ROOT, "MythicPlusTimerandTools");
+const TOC = path.join(ADDON_DIR, "MythicPlusTimerandTools.toc");
 
 function fail(msg) {
   console.error(msg);
@@ -22,13 +22,13 @@ const luaFiles = fs
   .filter((l) => /\.lua$/i.test(l) && !l.startsWith("#"))
   .map((l) => path.join(ADDON_DIR, l));
 
-if (!luaFiles.length) fail("no .lua files listed in MythicPlusTimer.toc");
+if (!luaFiles.length) fail("no .lua files listed in MythicPlusTimerandTools.toc");
 
 // Anything in the folder the .toc forgot would never load in game either.
 const onDisk = fs.readdirSync(ADDON_DIR).filter((f) => /\.lua$/i.test(f));
 const listed = new Set(luaFiles.map((f) => path.basename(f)));
 const orphans = onDisk.filter((f) => !listed.has(f));
-if (orphans.length) fail("not listed in MythicPlusTimer.toc (would never load): " + orphans.join(", "));
+if (orphans.length) fail("not listed in MythicPlusTimerandTools.toc (would never load): " + orphans.join(", "));
 
 // 1. Syntax gate.
 let totalLines = 0;
@@ -59,7 +59,7 @@ function run(file, addonArgs) {
   // table each time -- so hand it over the same way.
   let nargs = 0;
   if (addonArgs) {
-    lua.lua_pushliteral(L, "MythicPlusTimer");
+    lua.lua_pushliteral(L, "MythicPlusTimerandTools");
     lua.lua_getglobal(L, "MythicPlusTimerNamespace");
     nargs = 2;
   }

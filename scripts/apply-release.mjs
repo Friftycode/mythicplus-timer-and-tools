@@ -11,7 +11,7 @@ if (!version) {
   process.exit(1);
 }
 
-const TOC = "MythicPlusTimer/MythicPlusTimer.toc";
+const TOC = "MythicPlusTimerandTools/MythicPlusTimerandTools.toc";
 let toc = fs.readFileSync(TOC, "utf8");
 if (iface && /^\d{6}$/.test(iface)) {
   toc = toc.replace(/^## Interface:.*$/m, `## Interface: ${iface}`);
