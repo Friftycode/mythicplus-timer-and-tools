@@ -119,20 +119,20 @@ has(Mock.rendered(overlay()), "|cffffffff17,31 %", "an unfinished count stays wh
 
 Mock.state.criteria[1].quantityString = "260 / 260"
 Mock.advance(1)
-has(Mock.rendered(overlay()), "|cff40c057100,00 %", "a finished count turns the row green")
+has(Mock.rendered(overlay()), "|cff4ade68100,00 %", "a finished count turns the row green")
 
 -- The color has to agree with the number on screen. 259.99/260 displays as
 -- "100,00 %" after rounding, so it must be green too: a white "100,00 %" would
 -- have the row's own two halves contradicting each other.
 Mock.state.criteria[1].quantityString = "259.99 / 260"
 Mock.advance(1)
-has(Mock.rendered(overlay()), "|cff40c057100,00 %", "a count that rounds to 100 is green as well")
+has(Mock.rendered(overlay()), "|cff4ade68100,00 %", "a count that rounds to 100 is green as well")
 
 -- Blizzard's own completed flag is enough on its own, whatever the arithmetic.
 Mock.state.criteria[1].quantityString = "45 / 260"
 Mock.state.criteria[1].completed = true
 Mock.advance(1)
-has(Mock.rendered(overlay()), "|cff40c05717,31 %", "the client calling it complete is enough")
+has(Mock.rendered(overlay()), "|cff4ade6817,31 %", "the client calling it complete is enough")
 Mock.state.criteria[1].completed = false
 Mock.advance(1)
 has(Mock.rendered(overlay()), "|cffffffff17,31 %", "and an unfinished count goes back to white")
@@ -441,6 +441,9 @@ has(pj, "Testchar", "the party table lists each member")
 has(pj, "Healer", "including the other members")
 has(pj, "2450", "with the player's own M+ score")
 has(pj, "2510", "and each member's score from the client")
+-- With Raider.IO installed the score is painted the exact color its API returns,
+-- not a flat gold. The mock's API maps 2450 to #3399cc.
+has(pj, "|cff3399cc2450", "the M+ score matches Raider.IO's own color for it")
 has(pj, "489", "the player's item level shows when the client knows it")
 has(pj, "-", "a member with no cached item level reads '-' rather than a guess")
 
@@ -488,6 +491,43 @@ ok(popup():IsShown() == false, "joining a raid group opens nothing")
 MythicPlusTimerNamespace.setCfg("joinpopup", false)
 Mock.fire("LFG_LIST_JOINED_GROUP", 77)
 ok(popup():IsShown() == false, "the popup respects its setting")
+MythicPlusTimerNamespace.setCfg("joinpopup", true)
+
+-- Without Raider.IO installed, the score falls back to the client's own quality
+-- color for its band (2450 is epic -> #a336ed in the mock).
+local savedRIO = _G.RaiderIO
+_G.RaiderIO = nil
+Mock.fire("LFG_LIST_JOINED_GROUP", 77)
+has(Mock.rendered(popup()), "|cffa336ed2450", "score falls back to a quality color without Raider.IO")
+_G.RaiderIO = savedRIO
+Mock.fire("GROUP_LEFT")
+
+-- Ours replaces Blizzard's "You have joined a group" acknowledgement, but only
+-- for a Mythic+ join, only with the popup on, and never a live invite.
+local blizNotice = function() return _G.LFGListInviteDialog end
+blizNotice():Show()
+Mock.fire("LFG_LIST_JOINED_GROUP", 77)
+ok(blizNotice():IsShown() == false, "Blizzard's join notice is hidden for a Mythic+ join")
+Mock.fire("GROUP_LEFT")
+
+blizNotice():Show()
+blizNotice().AcceptButton:Show()
+Mock.fire("LFG_LIST_JOINED_GROUP", 77)
+ok(blizNotice():IsShown(), "a live Accept/Decline invite is never hidden")
+blizNotice().AcceptButton:Hide()
+blizNotice():Hide()
+Mock.fire("GROUP_LEFT")
+
+blizNotice():Show()
+Mock.fire("LFG_LIST_JOINED_GROUP", 78)
+ok(blizNotice():IsShown(), "Blizzard's notice is left alone for a non-Mythic+ join")
+blizNotice():Hide()
+
+MythicPlusTimerNamespace.setCfg("joinpopup", false)
+blizNotice():Show()
+Mock.fire("LFG_LIST_JOINED_GROUP", 77)
+ok(blizNotice():IsShown(), "with the popup off, Blizzard's notice is left to do its job")
+blizNotice():Hide()
 MythicPlusTimerNamespace.setCfg("joinpopup", true)
 
 -- A plain (non-flyout) teleport is found too, so the scan isn't flyout-only.
@@ -714,6 +754,16 @@ MythicPlusTimerNamespace.setCfg("bloodlust", false)
 partyLine("bl")
 ok(lust():IsShown() == false, "the alert respects its setting")
 MythicPlusTimerNamespace.setCfg("bloodlust", true)
+
+-- The alert is only for players who can answer the call: with no lust ability
+-- known, a call in chat raises nothing.
+Mock.playerSpells = {}
+lust():Hide()
+partyLine("bl")
+ok(lust():IsShown() == false, "no alert when the player has no lust ability")
+Mock.playerSpells = { [2825] = true }
+partyLine("bl")
+ok(lust():IsShown(), "the alert returns once a lust ability is known")
 
 -- ── Test frames ───────────────────────────────────────────────────────────
 -- Every movable frame only appears at its own moment, which is the worst time

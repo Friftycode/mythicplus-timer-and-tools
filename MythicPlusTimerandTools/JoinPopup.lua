@@ -148,7 +148,7 @@ local function jpRenderParty(f)
       if (not sc or sc == 0) and jpLeader and jpLeader.score and name == jpLeader.name then
         sc = jpLeader.score
       end
-      row.score:SetText(sc and (GOLD .. sc .. ENDC) or (GREY .. "-" .. ENDC))
+      row.score:SetText(ns.scoreColored(sc))
       row.name:Show(); row.ilvl:Show(); row.score:Show()
     end
   end
@@ -312,6 +312,21 @@ local function renderJoinFrame(dungeon, listingTitle, leaderName, leaderScore)
   jpRequestInspect()
 end
 
+-- Blizzard pops its own "You have joined a group" acknowledgement after you
+-- accept an invite. When our popup is taking over for a Mythic+ join, hide that
+-- one so there aren't two. Never the Accept/Decline invite itself: that fires
+-- earlier and is how you actually join, and it still shows its Accept button.
+local function jpHideBlizzardJoinNotice()
+  local d = _G.LFGListInviteDialog
+  if not d then return end
+  if d.AcceptButton and d.AcceptButton.IsShown and d.AcceptButton:IsShown() then return end
+  if type(StaticPopupSpecial_Hide) == "function" then
+    pcall(StaticPopupSpecial_Hide, d)
+  elseif d.Hide then
+    pcall(d.Hide, d)
+  end
+end
+
 local function onJoinedGroup(searchResultID)
   if not cfg("joinpopup") then return end
   if not (C_LFGList and C_LFGList.GetSearchResultInfo and searchResultID) then return end
@@ -337,6 +352,14 @@ local function onJoinedGroup(searchResultID)
   local leaderScore = info.leaderOverallDungeonScore
   if not (type(leaderScore) == "number" and not isSecret(leaderScore)) then leaderScore = nil end
   renderJoinFrame(dungeon, title, leader, leaderScore)
+  -- Ours is up, so drop Blizzard's duplicate notice. Once now in case it is
+  -- already showing, and once next frame in case Blizzard raises it just after
+  -- this event (its "joined" state hides its own Accept button, which is how
+  -- jpHideBlizzardJoinNotice tells it apart from a live invite).
+  jpHideBlizzardJoinNotice()
+  if type(C_Timer) == "table" and C_Timer.After then
+    C_Timer.After(0, jpHideBlizzardJoinNotice)
+  end
 end
 
 -- Preview frame for positioning. "Preview" isn't a real dungeon, so no teleport

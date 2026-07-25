@@ -7,8 +7,12 @@ local _, ns = ...
 -- derive from this hex.
 local GOLD_HEX = "e0a54e"
 ns.GOLD_HEX = GOLD_HEX
-ns.GOLD, ns.GREY, ns.WHITE = "|cff" .. GOLD_HEX, "|cff9d9d9d", "|cffffffff"
-ns.GREEN, ns.RED, ns.ENDC = "|cff40c057", "|cffe0524e", "|r"
+-- Secondary text. Kept light enough to clear WCAG AA (4.5:1) against the addon's
+-- own dark backdrops, rather than the dim mid-grey it used to be.
+ns.GOLD, ns.GREY, ns.WHITE = "|cff" .. GOLD_HEX, "|cffc8c8c8", "|cffffffff"
+-- Brighter, more saturated than before so the green/red still separate for
+-- red-green color vision and both clear AA on a dark background.
+ns.GREEN, ns.RED, ns.ENDC = "|cff4ade68", "|cffff6b66", "|r"
 -- Same gold as 0-1 RGB for SetColorTexture (WoW takes floats, not |cff hex), so
 -- the thin rule under section headers is the exact color as the gold text.
 ns.GOLD_RGB = {
@@ -431,6 +435,50 @@ function ns.classColoredName(name, englishClass)
   local c = RAID_CLASS_COLORS and englishClass and RAID_CLASS_COLORS[englishClass]
   if c and c.colorStr then return "|c" .. c.colorStr .. name .. ENDC end
   return ns.WHITE .. name .. ENDC
+end
+
+-- A Mythic+ rating painted the exact color Raider.IO would use. When Raider.IO
+-- is installed we ask its public API, so our number matches theirs to the pixel
+-- and tracks their seasonal gradient with nothing bundled or downloaded here.
+-- Without Raider.IO we fall back to the client's item-quality color for the
+-- score's band. nil/0 renders as a grey dash.
+local SCORE_QUALITY = {
+  { 3000, 6 },  -- artifact
+  { 2560, 5 },  -- legendary
+  { 2080, 4 },  -- epic
+  { 1600, 3 },  -- rare
+  { 0,    2 },  -- uncommon
+}
+local function scoreRGB(score)
+  local rio = _G.RaiderIO
+  if rio and rio.GetScoreColor then
+    -- Returns nothing when it declines (e.g. mid-combat); fall through then.
+    local ok, r, g, b = pcall(rio.GetScoreColor, score)
+    if ok and type(r) == "number" and type(g) == "number" and type(b) == "number" then
+      return r, g, b
+    end
+  end
+  if type(GetItemQualityColor) == "function" then
+    local quality = 2
+    for i = 1, #SCORE_QUALITY do
+      if score >= SCORE_QUALITY[i][1] then quality = SCORE_QUALITY[i][2]; break end
+    end
+    local r, g, b = GetItemQualityColor(quality)
+    if type(r) == "number" and type(g) == "number" and type(b) == "number" then
+      return r, g, b
+    end
+  end
+  return nil
+end
+function ns.scoreColored(score)
+  if type(score) ~= "number" or score <= 0 then return ns.GREY .. "-" .. ns.ENDC end
+  local r, g, b = scoreRGB(score)
+  local hex = GOLD_HEX
+  if r then
+    hex = string.format("%02x%02x%02x",
+      math.floor(r * 255 + 0.5), math.floor(g * 255 + 0.5), math.floor(b * 255 + 0.5))
+  end
+  return "|cff" .. hex .. score .. ns.ENDC
 end
 
 -- Newer clients can hand addons "secret" values that error on any real use.

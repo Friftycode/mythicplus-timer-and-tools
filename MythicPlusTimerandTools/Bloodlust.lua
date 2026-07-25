@@ -53,7 +53,7 @@ local blPreviewing = false
 local function blRestorePosition(f)
   -- Above the middle of the screen by default: high enough to be out of the way
   -- of the action bars, low enough to be inside where you are already looking.
-  ns.restorePosition(f, "blpoint", "CENTER", 0, 180)
+  ns.restorePosition(f, "blpoint", "CENTER", 0, 220)
 end
 
 local function ensureBlFrame()
@@ -118,13 +118,46 @@ local function blShowAlert(phrase, who)
   f:Show()
 end
 
+-- A lust call is only worth flagging to someone who can actually answer it, so
+-- the alert is gated on the player knowing one of these. Hunters get it from a
+-- ferocity pet, so the pet spellbook is checked too.
+local LUST_SPELLS = {
+  2825,    -- Bloodlust (Shaman)
+  32182,   -- Heroism (Shaman)
+  80353,   -- Time Warp (Mage)
+  390386,  -- Fury of the Aspects (Evoker)
+  264667,  -- Primal Rage (Hunter)
+  272678,  -- Primal Rage (the pet's cast)
+}
+local function playerCanLust()
+  local haveAPI = false
+  for i = 1, #LUST_SPELLS do
+    local id = LUST_SPELLS[i]
+    if type(IsPlayerSpell) == "function" then
+      haveAPI = true
+      local ok, v = pcall(IsPlayerSpell, id)
+      if ok and v then return true end
+    end
+    if type(IsSpellKnown) == "function" then
+      haveAPI = true
+      local ok, v = pcall(IsSpellKnown, id)
+      if ok and v then return true end
+      local okp, vp = pcall(IsSpellKnown, id, true) -- pet spellbook
+      if okp and vp then return true end
+    end
+  end
+  -- On a client that exposes neither API we can't tell who can lust, so show the
+  -- alert rather than silently swallow it -- the same as before this gate.
+  return not haveAPI
+end
+
 -- The client reassigns arg1..arg14 from a filter's return, so returning only
 -- the values this reads nils the language and flags and breaks its own handler.
 local function blOnChat(_, _, msg, sender, ...)
   if not cfg("bloodlust") then return false, msg, sender, ... end
   if type(msg) ~= "string" or isSecret(msg) then return false, msg, sender, ... end
   local phrase = blCalled(msg)
-  if phrase then
+  if phrase and playerCanLust() then
     local who = (type(sender) == "string" and not isSecret(sender)) and sender or nil
     -- Never let a draw error swallow someone's chat line.
     pcall(blShowAlert, phrase, who)

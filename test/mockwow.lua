@@ -382,6 +382,42 @@ RAID_CLASS_COLORS = {
   PALADIN = { colorStr = "fff58cba" }, PRIEST = { colorStr = "ffffffff" }, MAGE = { colorStr = "ff3fc7eb" },
 }
 
+-- The mock character knows Bloodlust; a test can clear this to check the alert
+-- is gated on actually having a lust ability.
+Mock.playerSpells = { [2825] = true }
+function IsPlayerSpell(id) return Mock.playerSpells[id] == true end
+
+-- Item-quality colors, so the score coloring runs its real path. Approximate
+-- Blizzard values, enough to tell the tiers apart.
+local QUALITY_COLOR = {
+  [2] = { 0.12, 1.00, 0.00 }, [3] = { 0.00, 0.44, 0.87 },
+  [4] = { 0.64, 0.21, 0.93 }, [5] = { 1.00, 0.50, 0.00 }, [6] = { 0.90, 0.80, 0.50 },
+}
+function GetItemQualityColor(q)
+  local c = QUALITY_COLOR[q] or { 1, 1, 1 }
+  return c[1], c[2], c[3]
+end
+
+-- Stand-in for an installed Raider.IO: its public API hands back a score's exact
+-- color. Deterministic here so the popup's match-Raider.IO path can be checked;
+-- clearing _G.RaiderIO exercises the item-quality fallback instead.
+RaiderIO = {
+  GetScoreColor = function(score)
+    if type(score) ~= "number" then return end
+    if score >= 3000 then return 1.00, 0.50, 0.00 end
+    if score >= 2401 then return 0.20, 0.60, 0.80 end
+    return 0.60, 0.60, 0.60
+  end,
+}
+
+-- Blizzard's "You have joined a group" acknowledgement. A hidden AcceptButton is
+-- its post-accept state (the one our popup replaces); showing the AcceptButton
+-- stands in for a live Accept/Decline invite that must never be hidden.
+LFGListInviteDialog = CreateFrame("Frame", "LFGListInviteDialog")
+LFGListInviteDialog.AcceptButton = CreateFrame("Button", nil, LFGListInviteDialog)
+LFGListInviteDialog.AcceptButton:Hide()
+LFGListInviteDialog:Hide()
+
 GameTooltip = CreateFrame("Frame", "GameTooltip")
 GameTooltip.lines = {}
 GameTooltip.SetOwner = function(self) self.lines = {} end
