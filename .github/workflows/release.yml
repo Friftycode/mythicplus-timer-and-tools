@@ -1,9 +1,11 @@
 name: monthly release
 
-# Keeps the shipped .toc Interface number current and cuts a release tag every
-# month. CurseForge is linked to this repo and packages any tagged commit it
-# sees, so pushing a tag here is the whole deploy: no API tokens, no secrets.
-# The "empty" build (nothing changed but the tag) still re-tags for the live
+# Keeps the shipped .toc Interface number current and cuts a dated release every
+# month. Delivery is the BigWigsMods packager step below: it builds the addon
+# zip and uploads it to CurseForge with CF_API_KEY. CurseForge repo integration
+# is deliberately not used (no package webhook), so the pushed tag by itself
+# deploys nothing -- it exists for the changelog and a versioned GitHub ref. The
+# "empty" build (nothing changed but the version) still re-uploads for the live
 # client so the addon never shows as out of date.
 on:
   schedule:
@@ -60,11 +62,20 @@ jobs:
             git push
           fi
           TAG="v${{ steps.meta.outputs.version }}"
-          git tag -a "$TAG" -m "$TAG"
-          git push origin "$TAG"
+          # Idempotent: a re-run after a failed upload must not die on its own
+          # tag. If the tag is already on origin, leave it and go straight to the
+          # upload -- the tag already points at this same release commit.
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already on origin; leaving it in place."
+          else
+            git tag -a "$TAG" -m "$TAG"
+            git push origin "$TAG"
+          fi
 
-      # Fallback for when CurseForge's repo integration is not set up. Skipped
-      # without a CF_API_KEY; running both would upload the file twice.
-      - name: Upload to CurseForge directly
+      # Primary delivery: builds the zip and uploads it to CurseForge. If this
+      # fails the whole run fails on purpose, so a broken upload is never silent;
+      # the tag step above is idempotent, so just re-running the workflow retries
+      # the upload cleanly. Guarded on the key only so forks without it don't error.
+      - name: Upload to CurseForge
         if: ${{ env.CF_API_KEY != '' }}
         uses: BigWigsMods/packager@master
