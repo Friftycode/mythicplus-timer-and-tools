@@ -362,6 +362,17 @@ function UnitIsUnit(a, b)
 end
 function UnitName(u) return (Mock.units[u] or {}).name end
 function UnitClassBase(u) return (Mock.units[u] or {}).class end
+
+-- Which character is "logged in", for the per-character profile tests. charKey()
+-- reads UnitFullName, so switching this and firing PLAYER_LOGIN stands in for
+-- logging into a different character on the same (account-wide) SavedVariables.
+Mock.state.char = { name = "Mainchar", realm = "Ravencrest" }
+function Mock.setChar(name, realm) Mock.state.char = { name = name, realm = realm } end
+function UnitFullName(unit)
+  if unit ~= "player" then return nil end
+  local c = Mock.state.char or {}
+  return c.name, c.realm
+end
 function UnitIsDeadOrGhost(u) return Mock.state.dead[u] and true or false end
 function UnitIsFeignDeath() return false end
 function IsMouseButtonDown() return false end

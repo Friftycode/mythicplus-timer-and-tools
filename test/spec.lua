@@ -1035,6 +1035,46 @@ defaultRow.__scripts.OnClick(defaultRow)
 ok(ns.activeProfile() == "Default", "clicking a profile row loads it")
 ns.deleteProfile("UI Test")
 
+-- ── Default profile shared across characters ───────────────────────────────
+-- The config is account-wide, so "Default" is one shared set of settings until a
+-- character is put on its own profile. A brand-new character starts on Default
+-- and sees whatever another character saved there; a character kept on its own
+-- profile keeps it, and is remembered as such the next time it logs in.
+
+MythicPlusTimerConfig = nil
+Mock.setChar("Alpha", "RealmOne")
+Mock.fire("PLAYER_LOGIN")
+ok(ns.activeProfile() == "Default", "a fresh character starts on the Default profile")
+ns.setCfg("bloodlust", false) -- a change made on Default, by Alpha
+
+-- A second, never-seen character inherits Default and the settings saved on it.
+Mock.setChar("Bravo", "RealmOne")
+Mock.fire("PLAYER_LOGIN")
+ok(ns.activeProfile() == "Default", "a new character defaults to the shared Default profile")
+ok(ns.cfg("bloodlust") == false, "and sees the settings another character saved on Default")
+
+-- Bravo makes and switches to its own profile. That must not move anyone else.
+ns.createProfile("Bravo PvE")
+ns.setCfg("bloodlust", true)
+ok(ns.activeProfile() == "Bravo PvE", "a character can put itself on its own profile")
+
+-- Alpha logs back in: remembered on Default, not dragged onto Bravo's profile.
+Mock.setChar("Alpha", "RealmOne")
+Mock.fire("PLAYER_LOGIN")
+ok(ns.activeProfile() == "Default", "the first character is remembered on Default")
+ok(ns.cfg("bloodlust") == false, "with Default's own settings intact")
+
+-- A brand-new third character (different realm) still starts on Default.
+Mock.setChar("Charlie", "RealmTwo")
+Mock.fire("PLAYER_LOGIN")
+ok(ns.activeProfile() == "Default", "another new character also starts on Default, across realms")
+
+-- And the character with its own profile keeps it when it returns.
+Mock.setChar("Bravo", "RealmOne")
+Mock.fire("PLAYER_LOGIN")
+ok(ns.activeProfile() == "Bravo PvE", "a character on its own profile keeps it")
+ok(ns.cfg("bloodlust") == true, "along with that profile's own settings")
+
 -- ── Report ────────────────────────────────────────────────────────────────
 
 -- print() is captured by the mock (the addon's own chat output is under test),
