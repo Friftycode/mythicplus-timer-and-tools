@@ -134,25 +134,3 @@ keyLoader:SetScript("OnEvent", function(self, event, name)
   hookKeystoneFrame()
   if keystoneHooked then self:UnregisterAllEvents() end
 end)
-
--- ── What this feature hands back ─────────────────────────────────────────
-
--- Reports each thing that has to be true, then runs an attempt out loud.
--- Standing at the Font of Power when you run it gives the most useful answer.
-ns.command("key", "why auto-slot did nothing", function()
-  mptPrint("auto-slot is " .. (cfg("autoslotkey") and "ON" or "OFF")
-    .. "; last attempt: " .. keyLastReason .. ".")
-  local bag, slot, link = findKeystone()
-  if bag then
-    print(GREY .. "  keystone: " .. ENDC .. tostring(link)
-      .. GREY .. " (bag " .. bag .. ", slot " .. slot .. ")" .. ENDC)
-  else
-    print(GREY .. "  keystone: none found in bags" .. ENDC)
-  end
-  print(GREY .. "  font frame: " .. ENDC
-    .. (_G.ChallengesKeystoneFrame and (WHITE .. "found" .. ENDC) or (GREY .. "not loaded yet" .. ENDC))
-    .. GREY .. ", hook: " .. ENDC
-    .. (keystoneHooked and (WHITE .. "installed" .. ENDC) or (GREY .. "not installed" .. ENDC)))
-  print(GREY .. "  already slotted: " .. ENDC .. WHITE .. tostring(keySlotted()) .. ENDC)
-  autoSlotKeystone(true)
-end)

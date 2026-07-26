@@ -258,8 +258,6 @@ local registered = {}
 for _, c in ipairs(MythicPlusTimerNamespace.commands) do registered[c.name] = true end
 ok(registered.lock and registered.reset, "the timer registered its commands")
 ok(registered.guild, "the guild panel registered its command")
-ok(registered.key, "the keystone auto-slot registered its command")
-ok(registered.tp and registered["tp all"], "the teleport scan registered its commands")
 
 -- Every registered command has to actually run, since nothing else calls them.
 for _, c in ipairs(MythicPlusTimerNamespace.commands) do
@@ -278,8 +276,7 @@ Mock.prints = {}
 SlashCmdList.MYTHICPLUSTIMER("nonsense")
 local help = table.concat(Mock.prints, "\n")
 has(help, "/mpt guild", "an unknown command prints the generated help")
-has(help, "/mpt key", "and it lists every command that declared help text")
-hasNot(help, "/mpt tp all", "a command documented elsewhere stays out of the list")
+has(help, "/mpt lock", "and it lists every command that declared help text")
 
 -- ── Guild panel respects its setting ──────────────────────────────────────
 
@@ -689,11 +686,6 @@ ok(select(2, copied:gsub("|cff40bf40", "")) == #Mock.chatHistory - 1,
 -- Note what this does NOT prove: the real ones throw when compared, so the
 -- order of the checks around isSecret still has to be got right by reading.
 hasNot(copied, "Message of the Day", "a secret line is left out rather than read")
-
--- /mpt copy is the same thing for the window you are typing in.
-copy:Hide()
-SlashCmdList.MYTHICPLUSTIMER("copy")
-ok(copy:IsShown(), "/mpt copy opens the box too")
 
 -- A client that will not read a window back must say so, not copy nothing.
 local realGet = cf1.GetNumMessages

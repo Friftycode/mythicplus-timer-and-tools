@@ -82,9 +82,6 @@ bottom-right corner to resize.
 | `/mpt guild` | Toggle the guild keys panel |
 | `/mpt lock` | Lock or unlock the overlay |
 | `/mpt reset` | Put the overlay back at its default position and scale |
-| `/mpt tp` | List the teleports the addon can see in your spellbook |
-| `/mpt key` | Explain why auto-slot did or didn't place your keystone |
-| `/mpt copy` | Open the chat window you're typing in, in a copyable box |
 | `/mpt frames` | Show or hide every movable frame at once |
 
 ## Notes on what it does and doesn't do
@@ -106,8 +103,8 @@ bottom-right corner to resize.
   is protected. It stays out of the way when a key is already slotted (so it can
   never displace a group member's) and when you're in combat (item pickup is
   blocked there), it re-checks the bag slot before touching anything, and it
-  prints to chat when it acts, so an item never moves silently. `/mpt key` says
-  why it did nothing, and the checkbox turns it off.
+  prints to chat when it acts, so an item never moves silently. The checkbox
+  turns it off.
 - **Dungeons are named exactly as the client names them.** The guild panel's
   rows are narrow and a long name clips. That is on purpose: the client has one
   name per dungeon and no abbreviation of it, so any short form would be either
@@ -125,8 +122,8 @@ bottom-right corner to resize.
   written and no number is parsed out of it.
 - **Teleports are read from your spellbook, never from a table of spell ids.**
   Those ids change every expansion, and a stale one would offer the wrong
-  destination. `/mpt tp` shows what the addon can see. Casting is protected, so
-  the button is a real secure button and can only be armed out of combat.
+  destination. Casting is protected, so the button is a real secure button and
+  can only be armed out of combat.
 - **A link click copies, it does not browse.** The client has no API that opens
   a browser, so there is nothing behind the box but your clipboard. Only an
   explicit `http://`, `https://`, or `www.` address is linked; a bare

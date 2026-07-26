@@ -333,10 +333,4 @@ for _, ev in ipairs({ "UPDATE_CHAT_WINDOWS", "UPDATE_FLOATING_CHAT_WINDOWS" }) d
 end
 clLoader:SetScript("OnEvent", function() pcall(clInstall) end)
 
--- The Copy button's action for the window you're typing in (reachable with the
--- button off).
-ns.command("copy", "copy the chat window", function()
-  clCopyChatFrame(_G.SELECTED_CHAT_FRAME or _G.ChatFrame1)
-end)
-
 ns.onOptionChanged("chatcopy", function() pcall(clHookAllChatFrames) end)
