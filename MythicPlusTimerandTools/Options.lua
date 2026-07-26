@@ -55,6 +55,14 @@ local function openSettings()
   return (pcall(Settings.OpenToCategory, id)) and true or false
 end
 
+-- Shared with the minimap button, which needs a way to open our Settings from
+-- its own file. Prints the fallback path when the category isn't up yet.
+function ns.openSettings()
+  if openSettings() then return true end
+  ns.print("open Settings, AddOns, Mythic+ Timer and Tools to configure.")
+  return false
+end
+
 -- ── Test frames ───────────────────────────────────────────────────────────
 -- Puts every registered preview frame on screen at once for positioning, and
 -- takes them away again. Knows nothing about which frames exist.

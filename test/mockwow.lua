@@ -424,6 +424,28 @@ GameTooltip.SetOwner = function(self) self.lines = {} end
 GameTooltip.AddLine = function(self, txt) table.insert(self.lines, txt) end
 GameTooltip.AddDoubleLine = function(self, l, r) table.insert(self.lines, l .. " | " .. r) end
 
+-- The minimap, and the ring the addon's own button parks on.
+Minimap = CreateFrame("Frame", "Minimap")
+Minimap:SetSize(140, 140)
+
+-- The context-menu system the minimap button builds its dropdown with. The
+-- generator is handed a root that records what it was asked to draw, so a test
+-- can read the menu's items and invoke them.
+MenuUtil = {
+  CreateContextMenu = function(owner, generator)
+    local root = { title = nil, items = {} }
+    function root:CreateTitle(t) self.title = t end
+    function root:CreateButton(t, fn) self.items[#self.items + 1] = { text = t, click = fn }; return {} end
+    function root:CreateCheckbox(t, isChecked, toggle)
+      self.items[#self.items + 1] = { text = t, isChecked = isChecked, toggle = toggle }
+      return {}
+    end
+    function root:CreateDivider() self.items[#self.items + 1] = { divider = true } end
+    generator(owner, root)
+    Mock.menu = root
+  end,
+}
+
 Enum = {
   StartTimerType = { ChallengeModeCountdown = 1 },
   PlayerInteractionType = { ChallengeMode = 53 },

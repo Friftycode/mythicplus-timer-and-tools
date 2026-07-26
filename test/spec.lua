@@ -32,11 +32,11 @@ local keys, boxCount = {}, 0
 for _, page in pairs(settingsPages) do
   for key in pairs(page.checks) do keys[key] = true; boxCount = boxCount + 1 end
 end
-ok(boxCount == 14, "fourteen checkboxes drawn, got " .. boxCount)
+ok(boxCount == 15, "fifteen checkboxes drawn, got " .. boxCount)
 ok(keys.mythicplustimer and keys.autonameplates and keys.letmefocus and keys.guildkeys
   and keys.autoslotkey and keys.joinpopup and keys.seasontp and keys.chatlinks
-  and keys.chatcopy and keys.bloodlust,
-  "all ten option keys present")
+  and keys.chatcopy and keys.bloodlust and keys.minimapbutton,
+  "all the option keys present")
 
 for _, o in ipairs(MythicPlusTimerNamespace.OPTIONS) do
   ok(o.group ~= nil, "option '" .. o.key .. "' declares a section")
@@ -852,6 +852,50 @@ MythicPlusTimerNamespace.setCfg("letmefocus", false)
 MythicPlusTimerNamespace.optionChanged.letmefocus()
 ok(overlay().timeZone:IsShown() == false, "switching the setting off removes the click targets")
 SlashCmdList.MYTHICPLUSTIMER("frames")
+
+-- ── Minimap button ─────────────────────────────────────────────────────────
+-- A launcher on the minimap. Its menu opens Settings, toggles Let me focus, and
+-- can hide the button, which the Settings checkbox brings back.
+
+local minibtn = function() return _G.MythicPlusTimerMinimapButton end
+ok(minibtn() ~= nil, "the minimap button is created")
+ok(minibtn():IsShown(), "the minimap button shows by default")
+
+-- Opening the menu builds it through the client's context-menu system.
+minibtn().__scripts.OnClick(minibtn())
+ok(Mock.menu ~= nil, "clicking the button opens a menu")
+ok(Mock.menu.title == "Mythic+ Timer and Tools", "the menu is titled")
+
+local function menuItem(text)
+  for _, it in ipairs(Mock.menu.items) do if it.text == text then return it end end
+end
+ok(menuItem("Settings") ~= nil, "the menu offers Settings")
+ok(menuItem("Let me focus") ~= nil, "the menu offers the Let me focus toggle")
+ok(menuItem("Hide minimap button") ~= nil, "the menu offers Hide minimap button")
+
+Mock.settings.opened = false
+menuItem("Settings").click()
+ok(Mock.settings.opened, "the Settings item opens the settings panel")
+
+-- The Let me focus checkbox reads and writes the same setting the overlay does.
+MythicPlusTimerNamespace.setCfg("letmefocus", false)
+minibtn().__scripts.OnClick(minibtn())
+ok(menuItem("Let me focus").isChecked() == false, "the toggle reads as off when the setting is off")
+menuItem("Let me focus").toggle()
+ok(MythicPlusTimerNamespace.cfg("letmefocus") == true, "toggling it from the menu turns the setting on")
+minibtn().__scripts.OnClick(minibtn())
+ok(menuItem("Let me focus").isChecked() == true, "and the toggle now reads as on")
+MythicPlusTimerNamespace.setCfg("letmefocus", false)
+
+-- Hiding it from the menu takes it off the minimap; the Settings checkbox is the
+-- way back.
+minibtn().__scripts.OnClick(minibtn())
+menuItem("Hide minimap button").click()
+ok(minibtn():IsShown() == false, "Hide minimap button takes it off the minimap")
+ok(MythicPlusTimerNamespace.cfg("minimapbutton") == false, "and the setting remembers it is hidden")
+MythicPlusTimerNamespace.setCfg("minimapbutton", true)
+MythicPlusTimerNamespace.optionChanged.minimapbutton()
+ok(minibtn():IsShown(), "turning the setting back on brings the button back")
 
 -- ── SavedVariables hygiene ────────────────────────────────────────────────
 -- A config from before profiles kept its options at the top level; it must fold

@@ -63,6 +63,11 @@ local DEFAULTS = {
   showforces = true,
   showbosses = true,
   showdeaths = true,
+  -- Minimap button: a small launcher on the minimap. Its menu opens Settings,
+  -- toggles "Let me focus", and can hide the button itself. The angle is where
+  -- it sits around the ring, and is set by dragging the button.
+  minimapbutton = true,
+  minimapangle = 225,
 }
 ns.DEFAULTS = DEFAULTS
 
@@ -84,6 +89,7 @@ ns.OPTIONS = {
   { key = "chatcopy", group = "Chat", section = "Copying", label = "Copy button on the chat window", tooltip = "Add a Copy button to each chat window. It opens that window's text in a box you can select and copy." },
   { key = "joinpopup", group = "Alerts", section = "Group finder", label = "Show which key you joined", tooltip = "When you join a group through the Group Finder, show the dungeon you were accepted into, its party, and a teleport button when you have one." },
   { key = "bloodlust", group = "Alerts", section = "Group chat", label = "Alert when bloodlust is called", tooltip = "Show a short on-screen alert when someone in your group types bl, hero, lust, drums, or the like." },
+  { key = "minimapbutton", group = "General", section = "Minimap button", label = "Show the minimap button", tooltip = "Show a small button on the minimap. Click it for a menu: open Settings, toggle Let me focus, or hide the button. Drag the button to move it around the minimap." },
 }
 
 -- Drawn under the tab strip: a tab name alone does not say what it changes.
@@ -92,6 +98,7 @@ ns.TAB_DESC = {
   ["Dungeons window"] = "What this addon adds inside Blizzard's own Mythic+ Dungeons window.",
   ["Chat"] = "What it adds to your chat windows.",
   ["Alerts"] = "Notices that appear on screen while you play.",
+  ["General"] = "The minimap button and other addon-wide settings.",
   ["About"] = "Which version you are on, and where to find the addon.",
 }
 

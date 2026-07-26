@@ -29,6 +29,9 @@ A retail World of Warcraft addon with two pieces:
   to the plain text they displayed, each line kept in the color chat drew it in.
 - **Bloodlust alert**: when someone in your group types bl, hero, lust, drums, or
   any of the other ways people write it, a short alert says so on screen.
+- **Minimap button**: a small button on the minimap. Click it for a menu that
+  opens Settings, toggles Let me focus, or hides the button itself; drag it to
+  move it around the minimap. Bring it back from **General** in the Settings.
 - **Test frames**: every movable frame only appears at its own moment, which is
   the worst possible time to be arranging your screen. One button in the
   Settings panel (or `/mpt frames`) puts them all up at once so you can drag
@@ -63,6 +66,7 @@ out under horizontal tabs, and **Profiles**.
 | Alerts | Show which key you joined | on | Popup naming the dungeon (and the party's item level and M+ score) when a group accepts you |
 | Alerts | Alert when bloodlust is called | on | On-screen alert when someone in the group calls it in chat |
 | Display | Show affixes / enemy forces / bosses / deaths | on | Drop any of these blocks from the overlay |
+| General | Show the minimap button | on | A minimap button whose menu opens Settings, toggles Let me focus, or hides itself |
 
 **Profiles** keeps more than one set of settings and remembers which each
 character uses: create, copy, reset, or delete profiles, set one as the default
@@ -168,6 +172,8 @@ One file per feature. The `.toc` is the load order and the dependency order:
 | `MythicPlusTimerandTools/JoinPopup.lua` | Which key did I just join |
 | `MythicPlusTimerandTools/Chat.lua` | Clickable links, and copying a chat window |
 | `MythicPlusTimerandTools/Bloodlust.lua` | Bloodlust called in chat |
+| `MythicPlusTimerandTools/Minimap.lua` | Minimap button and its menu |
+| `MythicPlusTimerandTools/Media/minimap-icon.tga` | The minimap button and AddOns-list icon |
 | `MythicPlusTimerandTools/Options.lua` | Settings panel and `/mpt`, generated from the registries |
 | `MythicPlusTimerandTools/Panel.lua` | Tabbed Settings sub-page and the Profiles page |
 | `test/mockwow.lua` | Mock WoW client API |
@@ -175,6 +181,7 @@ One file per feature. The `.toc` is the load order and the dependency order:
 | `test/run.js` | Runner: luaparse syntax gate, then fengari |
 | `scripts/current-interface.mjs` | Reads the live retail interface number from Blizzard's version service |
 | `scripts/apply-release.mjs` | Stamps a version (and interface) into the `.toc` and `package.json` |
+| `scripts/generate-icon.mjs` | Renders the addon icon (`Media/minimap-icon.tga`) and the CurseForge image |
 | `.pkgmeta` | Tells CurseForge's packager which folder is the addon |
 | `.github/workflows/test.yml` | CI: runs `npm test` on every push and pull request |
 | `.github/workflows/release.yml` | Monthly job that keeps the interface current and tags a release |

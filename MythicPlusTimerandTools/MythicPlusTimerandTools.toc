@@ -5,7 +5,7 @@
 ## Version: 2026.7.25.1
 ## SavedVariables: MythicPlusTimerConfig, MythicPlusTimerRun
 ## X-Curse-Project-ID: 1623279
-## IconTexture: Interface\Icons\inv_relics_hourglass
+## IconTexture: Interface\AddOns\MythicPlusTimerandTools\Media\minimap-icon.tga
 ## X-License: MIT
 
 # Category shown in the in-game AddOn list. Blizzard's own official names, so
@@ -34,5 +34,6 @@ Teleports.lua
 JoinPopup.lua
 Chat.lua
 Bloodlust.lua
+Minimap.lua
 Options.lua
 Panel.lua

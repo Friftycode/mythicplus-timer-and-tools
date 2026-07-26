@@ -10,10 +10,15 @@ local TAB_H, TAB_GAP, STRIP_Y = 26, 4, -14
 local DESC_Y, CONTENT_Y = -48, -74
 local ROW_H, SECTION_GAP = 26, 14
 
-local C_TAB_ON = { 0.24, 0.19, 0.10, 0.95 }
-local C_TAB_OFF = { 0.09, 0.09, 0.09, 0.75 }
-local C_GOLD = { 0.88, 0.65, 0.31 }
-local C_DIM = { 0.62, 0.62, 0.62 }
+-- The active tab is a solid gold-brown; an inactive one is a distinct dark box
+-- rather than a faint wash, so the strip reads as tabs against Blizzard's own
+-- panel behind it. Both are opaque, so the game world never bleeds through them.
+local C_TAB_ON = { 0.30, 0.23, 0.12, 1.0 }
+local C_TAB_OFF = { 0.15, 0.15, 0.16, 1.0 }
+local C_GOLD = { 0.90, 0.68, 0.34 }
+-- Inactive-tab label: bright enough to read on its own, still clearly secondary
+-- to the gold of the selected tab. The old 0.62 grey washed into the backdrop.
+local C_DIM = { 0.82, 0.82, 0.82 }
 
 -- ── Controls ───────────────────────────────────────────────────────────────
 
@@ -52,7 +57,7 @@ local function helpIcon(parent, anchorTo, title, body)
   h:SetPoint("LEFT", anchorTo, "RIGHT", 6, 0)
   h.disc = h:CreateTexture(nil, "BACKGROUND")
   h.disc:SetAllPoints()
-  paint(h.disc, { 1, 1, 1, 0.07 })
+  paint(h.disc, { 1, 1, 1, 0.14 })
   h.mark = h:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   h.mark:SetPoint("CENTER")
   h.mark:SetText(GOLD .. "?" .. ENDC)
@@ -142,7 +147,7 @@ local function heading(parent, text, x, y, width)
   fs:SetText(GOLD .. text .. ENDC)
   local line = parent:CreateTexture(nil, "ARTWORK")
   line:SetHeight(1)
-  paint(line, { 1, 1, 1, 0.10 })
+  paint(line, { C_GOLD[1], C_GOLD[2], C_GOLD[3], 0.35 })
   line:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y - 16)
   line:SetPoint("TOPRIGHT", parent, "TOPLEFT", x + (width or 460), y - 16)
   return fs
@@ -244,11 +249,11 @@ local function buildAbout(page)
   ghLabel:SetText(GREY .. "GitHub" .. ENDC)
   page.github = urlBox(page, GITHUB_URL, 4, -200)
 
-  local hint = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  local hint = page:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   hint:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -232)
   hint:SetWidth(440)
   hint:SetJustifyH("LEFT")
-  hint:SetText("Click a link to select it, then copy with Ctrl+C.")
+  hint:SetText(GREY .. "Click a link to select it, then copy with Ctrl+C." .. ENDC)
   return page
 end
 
@@ -282,7 +287,7 @@ local function buildSettings()
 
   local strip = panel:CreateTexture(nil, "ARTWORK")
   strip:SetHeight(1)
-  paint(strip, { 1, 1, 1, 0.12 })
+  paint(strip, { 1, 1, 1, 0.25 })
   strip:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, STRIP_Y - TAB_H)
   strip:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -16, STRIP_Y - TAB_H)
 
