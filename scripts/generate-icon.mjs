@@ -44,13 +44,27 @@ function render(OUT, SS, round) {
   const segCov = (px, py, s, hw) => cl(hw - segDist(px, py, s[0], s[1], s[2], s[3]) + aa);
   const S = (v) => cx + (v * f - cx) * cs; // scale an authored coord about center
 
-  // Gear: an 8-tooth ring behind the letters.
-  const Rt = 116 * f * cs, Rb = 86 * f * cs, Ri = 74 * f * cs, Rh = 54 * f * cs, toothHW = 17 * f * cs;
-  const teeth = [];
-  for (let k = 0; k < 8; k++) {
-    const a = (-90 + 45 * k) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
-    teeth.push([cx + Ri * c, cy + Ri * s, cx + Rt * c, cy + Rt * s]);
+  // Gear: an 8-tooth ring behind the letters. Teeth are short, square-cornered
+  // nubs (a real cog), not long rounded spokes -- each is a rectangle standing on
+  // the gear body, tested in its own radial/tangential frame so the corners stay
+  // square rather than getting the round caps a line segment would give.
+  const Rb = 88 * f * cs, Rh = 52 * f * cs;
+  const toothIn = 80 * f * cs, toothOut = 104 * f * cs, toothHW = 13 * f * cs;
+  const NT = 8, dirs = [];
+  for (let k = 0; k < NT; k++) {
+    const a = (-90 + 360 / NT * k) * Math.PI / 180;
+    dirs.push([Math.cos(a), Math.sin(a)]);
   }
+  const toothCov = (px, py) => {
+    const dx = px - cx, dy = py - cy;
+    let best = 0;
+    for (const [c, s] of dirs) {
+      const r = dx * c + dy * s, t = -dx * s + dy * c; // radial, tangential
+      const cov = cl(Math.min(r - toothIn, toothOut - r, toothHW - Math.abs(t)) + aa);
+      if (cov > best) best = cov;
+    }
+    return best;
+  };
   // "M+" as thick strokes, centered over the gear.
   const strokes = [
     [S(64), S(162), S(64), S(94)], [S(120), S(162), S(120), S(94)],
@@ -65,7 +79,7 @@ function render(OUT, SS, round) {
     const px = x + 0.5, py = y + 0.5;
     // The gear as one unified ring, so overlapping teeth/body don't double-darken.
     let ring = discCov(px, py, Rb);
-    for (const t of teeth) { const c = segCov(px, py, t, toothHW); if (c > ring) ring = c; }
+    const tc = toothCov(px, py); if (tc > ring) ring = tc;
     const gear = ring * (1 - discCov(px, py, Rh));
     if (gear > 0) blend(x, y, GEAR[0], GEAR[1], GEAR[2], 0.32 * gear);
 
