@@ -76,6 +76,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # the packager reads past tags to build a changelog
+          # Push the keep-alive commit with a personal access token when one is
+          # set, so it counts as a real user's repository activity and can never
+          # trip GitHub's 60-day auto-disable of scheduled workflows. Falls back
+          # to the default token (still works; only the 60-day edge case differs).
+          # To enable: create a fine-grained PAT with Contents: read and write on
+          # this repo, then add it as the RELEASE_PAT repository secret.
+          token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

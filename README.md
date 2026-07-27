@@ -380,7 +380,12 @@ or not your computer is on. No external service is needed.
   own version service (the live `wow` product, never the PTR), stamps it into the
   `.toc`, re-runs the tests, commits, and pushes a `v<version>` tag, then
   packages and uploads to CurseForge. The keep-alive commit also keeps the cron
-  itself alive (GitHub suspends schedules on repos idle for 60 days).
+  itself alive (GitHub suspends schedules on repos idle for 60 days); the 30-day
+  cadence resets that timer well before it can trip. For zero ambiguity over very
+  long absences, set a `RELEASE_PAT` repository secret (a fine-grained PAT with
+  Contents: read/write): the release then pushes with it, so the keep-alive
+  commit counts unambiguously as user activity. Without it, the workflow falls
+  back to the default token and still works.
 
 ## License
 
