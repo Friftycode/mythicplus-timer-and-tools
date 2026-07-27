@@ -15,6 +15,11 @@ local cfg, setCfg = ns.cfg, ns.setCfg
 -- id so the in-dungeon window and the prepared notes are the same store.
 
 local NP_W, NP_H, NP_COL_W = 360, 260, 100
+-- Bounds for the draggable size and section-column width. Kept in step with the
+-- clamps in Core's cleanProfile.
+local NP_MIN_W, NP_MIN_H, NP_MAX_W, NP_MAX_H = 260, 160, 900, 800
+local NP_COL_MIN, NP_COL_MAX = 60, 260
+local NP_GAP = 14  -- space between the section column and the note
 local MD_FONT = "Fonts\\FRIZQT__.TTF"
 local npFrame, npCurrentID, npLoading
 local npKeyStarted = false
@@ -83,14 +88,28 @@ local function npBossesFor(journalID)
   return list
 end
 
-local npDungeonCache
-local function npDungeonList()
-  if npDungeonCache then return npDungeonCache end
-  local out, seen = {}, {}
+-- The instance's name for any journal id, even one no longer in the current
+-- tiers, so a saved note for a rotated-out dungeon can still be labelled.
+local function npResolveDungeonName(instID)
+  if not (EJ_SelectInstance and EJ_GetInstanceInfo) then return nil end
+  npLoadJournal()
+  if not pcall(EJ_SelectInstance, instID) then return nil end
+  local ok, name = pcall(EJ_GetInstanceInfo)
+  if ok and type(name) == "string" and name ~= "" then return name end
+  return nil
+end
+
+-- The current tiers' dungeons, scanned once (the journal doesn't change mid
+-- session). Saved-but-rotated-out dungeons are added on top per call, so a note
+-- saved this session for an out-of-tier dungeon shows up without a reload.
+local npTierCache
+local function npScanTiers()
+  local out = {}
   if not (EJ_GetNumTiers and EJ_SelectTier and EJ_GetInstanceByIndex) then return out end
   npLoadJournal()
   local ok, numTiers = pcall(EJ_GetNumTiers)
   if not (ok and type(numTiers) == "number" and numTiers > 0) then return out end
+  local seen = {}
   for tier = numTiers, math.max(1, numTiers - 1), -1 do
     pcall(EJ_SelectTier, tier)
     for i = 1, 50 do
@@ -102,8 +121,36 @@ local function npDungeonList()
       end
     end
   end
+  return out
+end
+
+local function npDungeonList()
+  if not npTierCache then
+    local scanned = npScanTiers()
+    if #scanned > 0 then npTierCache = scanned end
+  end
+  local out, seen = {}, {}
+  for _, d in ipairs(npTierCache or {}) do
+    out[#out + 1] = { key = d.key, name = d.name }
+    seen[d.key] = true
+  end
+  -- Dungeons that have saved notes but have rotated out of the current tiers are
+  -- kept in the list so those notes stay reachable (and visibly are not lost)
+  -- until the dungeon returns. Notes are never deleted for being out of season.
+  for key, entry in pairs(npNotes()) do
+    local id = tonumber(key) or key
+    if type(id) == "number" and not seen[id] then
+      local e = npNormalize(entry)
+      if e.dungeon ~= "" or next(e.bosses) then
+        local name = npResolveDungeonName(id)
+        if name then
+          seen[id] = true
+          out[#out + 1] = { key = id, name = name, saved = true }
+        end
+      end
+    end
+  end
   table.sort(out, function(a, b) return a.name < b.name end)
-  if #out > 0 then npDungeonCache = out end
   return out
 end
 
@@ -294,10 +341,10 @@ end
 
 local function npMenuShown() return cfg("notepadmenu") ~= false end
 
--- Content width with the section column shown, and with it collapsed (the note
--- reclaims the column plus the gap to its left).
-local NP_CONTENT_W = NP_W - NP_COL_W - MP_PAD - 44
-local NP_CONTENT_W_WIDE = NP_CONTENT_W + NP_COL_W + 14
+-- The section column's width, clamped, from the value the divider drag saved.
+local function npColW()
+  return math.max(NP_COL_MIN, math.min(NP_COL_MAX, cfg("notepadcolw") or NP_COL_W))
+end
 
 -- Slim scrollbar, shown only when the content overflows.
 local function npUpdateScroll(f)
@@ -311,6 +358,7 @@ local function npUpdateScroll(f)
     f.scroll:SetVerticalScroll(v)
     f.sbar:SetMinMaxValues(0, range)
     f.sbar:SetValue(v)
+    if type(ns.sizeScrollThumb) == "function" then ns.sizeScrollThumb(f.thumb, viewH, childH) end
     f.sbar:Show()
   else
     f.scroll:SetVerticalScroll(0)
@@ -330,10 +378,19 @@ end
 -- Shows or collapses the section column and re-flows the note into the freed
 -- width. The arrow points left when the column is up (click to hide) and right
 -- when it is down (click to show).
+-- Lays out the column, the note area, and the note width for the current frame
+-- size and column width. Called when the column is toggled, the frame is
+-- resized, or the divider is dragged. The note reclaims the column's space when
+-- it is collapsed. 30px on the right leaves room for the scrollbar and inset.
 local function npApplyMenu(f)
+  if not f.view then return end  -- fires during the creation-time SetSize
   local shown = npMenuShown()
-  if f.col then f.col:SetShown(shown) end
+  local colW = npColW()
+  local frameW = f:GetWidth() or NP_W
+
+  if f.col then f.col:SetShown(shown); f.col:SetWidth(colW) end
   if f.colRule then f.colRule:SetShown(shown) end
+  if f.colDrag then f.colDrag:SetShown(shown) end
   if f.menuToggle and f.menuToggle.tex then
     f.menuToggle.tex:SetRotation(shown and math.pi or 0)
   end
@@ -342,14 +399,15 @@ local function npApplyMenu(f)
   f.scroll:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -22, MP_PAD + 12)
   f.hint:ClearAllPoints()
   if shown then
-    f.scroll:SetPoint("TOPLEFT", f.col, "TOPRIGHT", 14, 0)
-    f.hint:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", MP_PAD + NP_COL_W + 14, MP_PAD - 2)
-    f.contentW = NP_CONTENT_W
+    f.scroll:SetPoint("TOPLEFT", f.col, "TOPRIGHT", NP_GAP, 0)
+    f.hint:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", MP_PAD + colW + NP_GAP, MP_PAD - 2)
+    f.contentW = frameW - MP_PAD - colW - NP_GAP - 30
   else
     f.scroll:SetPoint("TOPLEFT", f, "TOPLEFT", MP_PAD, -26)
     f.hint:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", MP_PAD, MP_PAD - 2)
-    f.contentW = NP_CONTENT_W_WIDE
+    f.contentW = frameW - MP_PAD - 30
   end
+  f.contentW = math.max(80, f.contentW)
   if f.view then f.view:SetWidth(f.contentW) end
   if f.edit then f.edit:SetWidth(f.contentW) end
   if not f.editing and f.renderView then f.renderView() else npUpdateScroll(f) end
@@ -405,9 +463,12 @@ local ensureNpFrame
 ensureNpFrame = function()
   if npFrame then return npFrame end
   local f = CreateFrame("Frame", "MythicPlusTimerNotepad", UIParent, "BackdropTemplate")
-  f:SetSize(NP_W, NP_H)
+  local startW = math.max(NP_MIN_W, math.min(NP_MAX_W, cfg("notepadw") or NP_W))
+  local startH = math.max(NP_MIN_H, math.min(NP_MAX_H, cfg("notepadh") or NP_H))
+  f:SetSize(startW, startH)
   f:SetFrameStrata("MEDIUM")
   f:SetMovable(true)
+  f:SetResizable(true)
   f:EnableMouse(true)
   f:RegisterForDrag("LeftButton")
   f:SetScript("OnDragStart", function(self)
@@ -471,7 +532,7 @@ ensureNpFrame = function()
   f.col = CreateFrame("Frame", nil, f)
   f.col:SetPoint("TOPLEFT", f, "TOPLEFT", MP_PAD, -26)
   f.col:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", MP_PAD, MP_PAD)
-  f.col:SetWidth(NP_COL_W)
+  f.col:SetWidth(npColW())
 
   f.colRule = f:CreateTexture(nil, "ARTWORK")
   f.colRule:SetWidth(1)
@@ -503,10 +564,10 @@ ensureNpFrame = function()
   local track = f.sbar:CreateTexture(nil, "BACKGROUND")
   track:SetAllPoints()
   track:SetColorTexture(1, 1, 1, 0.05)
-  local thumb = f.sbar:CreateTexture(nil, "OVERLAY")
-  thumb:SetColorTexture(GOLD_RGB[1], GOLD_RGB[2], GOLD_RGB[3], 0.55)
-  thumb:SetSize(5, 40)
-  f.sbar:SetThumbTexture(thumb)
+  f.thumb = f.sbar:CreateTexture(nil, "OVERLAY")
+  f.thumb:SetColorTexture(GOLD_RGB[1], GOLD_RGB[2], GOLD_RGB[3], 0.55)
+  f.thumb:SetSize(5, 24)
+  f.sbar:SetThumbTexture(f.thumb)
   f.sbar:SetScript("OnValueChanged", function(self, v) f.scroll:SetVerticalScroll(v) end)
   f.sbar:Hide()
 
@@ -627,6 +688,78 @@ ensureNpFrame = function()
     npSection = section
     loadSection()
   end
+
+  -- A drag handle over the divider between the column and the note, to set how
+  -- wide the section list is. Tracks the cursor while held, clamped, and saves.
+  f.colDrag = CreateFrame("Button", nil, f)
+  f.colDrag:SetWidth(9)
+  f.colDrag:SetPoint("TOP", f.colRule, "TOP", 0, 2)
+  f.colDrag:SetPoint("BOTTOM", f.colRule, "BOTTOM", 0, -2)
+  f.colDrag:EnableMouse(true)
+  f.colDrag:SetScript("OnEnter", function(self)
+    if npIsLocked() then return end
+    self.glow = self.glow or self:CreateTexture(nil, "HIGHLIGHT")
+    self.glow:SetAllPoints()
+    self.glow:SetColorTexture(GOLD_RGB[1], GOLD_RGB[2], GOLD_RGB[3], 0.25)
+  end)
+  f.colDrag:SetScript("OnMouseDown", function(self)
+    if npIsLocked() or not npMenuShown() then return end
+    self.dragging = true
+  end)
+  f.colDrag:SetScript("OnMouseUp", function(self) self.dragging = false end)
+  f.colDrag:SetScript("OnUpdate", function(self)
+    if not self.dragging then return end
+    local scale, left = f:GetEffectiveScale(), f:GetLeft()
+    if not (scale and scale > 0 and left) then return end
+    local cx = (GetCursorPosition()) / scale
+    local w = math.max(NP_COL_MIN, math.min(NP_COL_MAX, cx - left - MP_PAD))
+    setCfg("notepadcolw", w)
+    npApplyMenu(f)
+  end)
+
+  -- Corner resize grip, bottom-right. Saves the size and re-flows the note.
+  f.resize = CreateFrame("Button", nil, f)
+  f.resize:SetSize(16, 16)
+  f.resize:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -3, 3)
+  f.resize:SetAlpha(0.6)
+  f.resize.tex = f.resize:CreateTexture(nil, "OVERLAY")
+  f.resize.tex:SetAllPoints()
+  f.resize.tex:SetTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+  f.resize:SetScript("OnEnter", function(self) self:SetAlpha(1) end)
+  f.resize:SetScript("OnLeave", function(self) self:SetAlpha(0.6) end)
+  f.resize:SetScript("OnMouseDown", function()
+    if npIsLocked() then return end
+    -- Pin the top-left corner where it currently is before sizing. Without this
+    -- the frame's point/center anchor fights StartSizing and the first drag
+    -- makes it jump to a huge size.
+    local left, top = f:GetLeft(), f:GetTop()
+    if left and top then
+      f:ClearAllPoints()
+      f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+    end
+    f:StartSizing("BOTTOMRIGHT")
+  end)
+  f.resize:SetScript("OnMouseUp", function()
+    f:StopMovingOrSizing()
+    setCfg("notepadw", f:GetWidth())
+    setCfg("notepadh", f:GetHeight())
+    -- The anchor moved to TOPLEFT for sizing; store it back the normal way.
+    ns.savePosition(f, "notepadpoint")
+    npApplyMenu(f)
+  end)
+  if f.SetResizeBounds then
+    pcall(f.SetResizeBounds, f, NP_MIN_W, NP_MIN_H, NP_MAX_W, NP_MAX_H)
+  elseif f.SetMinResize then
+    pcall(f.SetMinResize, f, NP_MIN_W, NP_MIN_H)
+    pcall(f.SetMaxResize, f, NP_MAX_W, NP_MAX_H)
+  end
+
+  -- Re-flow the note as the frame is dragged larger or smaller.
+  f:SetScript("OnSizeChanged", function() npApplyMenu(f) end)
+
+  -- Kept usable under the edit-mode overlay so the window can still be resized
+  -- and its divider dragged while the test frames are up.
+  f.mptEditPassthrough = { f.resize, f.colDrag }
 
   npApplyLock(f)
   npApplyMenu(f)
@@ -776,4 +909,4 @@ ns.previewFrame("instance notepad", function()
   f:Show()
 end, function()
   if npFrame and not npShouldShow() then npFrame:Hide() end
-end)
+end, function() return npFrame end, { group = "Note", section = "The note window" })

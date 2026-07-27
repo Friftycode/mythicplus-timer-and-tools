@@ -43,17 +43,44 @@ A retail World of Warcraft addon with two pieces:
   fight, so it stays a fixed reference while the boss is up. Notes can also be
   **prepared ahead of time** from the Note settings tab — pick any dungeon and
   boss and write its note before you set foot inside. Each dungeon keeps its own
-  notes, account-wide, surviving a reload or a wipe. Choose whether the window is
-  always up, appears only once a key starts, or stays hidden for the whole run.
+  notes, account-wide, surviving a reload or a wipe. They are also kept when a
+  dungeon rotates out of the season, and stay listed in the prepare-ahead editor
+  (labelled from the journal), so a note you wrote is still there if the dungeon
+  returns. Choose whether the window is always up, appears only once a key
+  starts, or stays hidden for the whole run.
+  The window is resizable from its bottom-right grip, and the divider between the
+  section list and the note is draggable to set how wide the list is; both are
+  remembered.
 - **Automation**: opt-in conveniences that react to the game's own events — auto
   repair (guild funds first, then your gold), auto sell grey junk, auto accept
   and turn in quests (everywhere or in dungeons only), a warning when a dungeon
   isn't set to Mythic, and keeping a new group listing on Mythic as you switch
   dungeons in the group finder.
-- **Test frames**: every movable frame only appears at its own moment, which is
-  the worst possible time to be arranging your screen. One button in the
-  Settings panel (or `/mpt frames`) puts them all up at once so you can drag
-  them where you want them, and takes them all away again.
+- **Party, invites, and duels**: opt-in handling of what other players send you,
+  ported from Leatrix Plus and living on the **Automation** tab. Auto-accept a
+  party invite from a friend, auto-confirm the role check when a friend queues
+  you, invite anyone who whispers a keyword (friends-only optional), and block
+  party invites, "requested to join" confirmations, or duels from anyone who
+  isn't a friend. Guild members count as friends by default; communities are an
+  opt-in. Every behaviour is off until you turn it on.
+- **Test frames (edit mode)**: every movable frame only appears at its own
+  moment, which is the worst possible time to be arranging your screen. One
+  button in the Settings panel (or `/mpt frames`) puts them all up at once, each
+  filled with example content (the run overlay shows a mid-key snapshot: clock,
+  upgrade windows, enemy forces, boss kills, and a death per party member) and
+  wearing a light-blue overlay like Blizzard's Edit Mode. Drag a frame to move
+  it, resize the ones with a grip (the run overlay and the note window) right
+  there, or click it to jump straight to that frame's settings; Escape closes
+  them all.
+
+- **Update reminder**: an addon can't reach the internet to check for a new
+  release, so two offline signals stand in. Releases are date-stamped, so a
+  version more than 45 days old is flagged as likely behind; and party members
+  broadcast their version, so seeing a newer one is proof a new release exists.
+  That newer version is remembered account-wide and keeps reminding, across
+  sessions and after you leave the group, until this client catches up. The
+  reminder shows as a line across the top of the Settings window and an entry in
+  the minimap-button menu.
 
 Every number comes straight from the game client's own Challenge Mode /
 Scenario API. There is no bundled data, no download, and no network access:
@@ -94,11 +121,25 @@ out under horizontal tabs, and **Profiles**.
 | Automation | Warn if not set to Mythic | off | Warn on entering a dungeon that isn't Mythic difficulty |
 | Automation | Keep new listings on Mythic+ | on | Hold a group listing on the Mythic+ keystone as you switch dungeons; a manual pick is respected |
 | Automation | Default playstyle | Competitive | Preselect the required "Select Playstyle" on a new listing (Off / Learning / Relaxed / Competitive / Carry offered) |
+| Automation | Accept party invites from friends | off | Auto-accept a party invite from a friend (unless you're queued) |
+| Automation | Confirm role when a friend queues | off | Auto-confirm the role check when the leader who started it is a friend |
+| Automation | Invite when whispered a keyword | off | Invite whoever whispers your keyword (default "inv"); a "Keyword" box and an "Only invite friends" toggle sit beside it |
+| Automation | Block party invites | off | Decline party invites from anyone who isn't a friend |
+| Automation | Block requested invites | off | Decline "requested to join your group" confirmations from non-friends |
+| Automation | Block duels | off | Decline duel requests from non-friends |
+| Automation | Treat guild members as friends | on | Count online guild members as friends for the options above |
+| Automation | Treat community members as friends | off | Count online community members as friends for the options above |
 | General | Show the minimap button | on | A minimap button whose menu opens Settings, toggles Let me focus, or hides itself |
 
-**Profiles** keeps more than one set of settings and remembers which each
-character uses: create, copy, reset, or delete profiles, set one as the default
-for new characters, and share a profile with an export/import string.
+**Profiles** keeps more than one set of settings: create, reset, or delete
+profiles, set one as the account **main**, copy another profile's settings into
+the current one with the **Copy from** dropdown (so a new profile can start from
+an existing look), and share a profile with an export/import string. Characters follow the main profile until you switch one to
+another profile yourself; a character you switch stays on its choice, while every
+character you have not switched moves with the main (so a brand-new character
+starts on whatever the main currently is). The export string is complete: it
+carries every setting the addon has, each at its current value, so an import
+reproduces the whole profile on its own.
 
 Under the checkboxes is **Show or hide test frames**, which puts every movable
 frame on screen at once with placeholder content so you can drag them where you
@@ -191,7 +232,7 @@ One file per feature. The `.toc` is the load order and the dependency order:
 
 | Path | Purpose |
 | --- | --- |
-| `MythicPlusTimerandTools/MythicPlusTimer.toc` | Addon manifest and load order |
+| `MythicPlusTimerandTools/MythicPlusTimerandTools.toc` | Addon manifest and load order |
 | `MythicPlusTimerandTools/Core.lua` | Palette, config, and the registries features declare themselves into |
 | `MythicPlusTimerandTools/Timer.lua` | The M+ run overlay |
 | `MythicPlusTimerandTools/GuildKeys.lua` | Guild keys this week |
@@ -200,6 +241,12 @@ One file per feature. The `.toc` is the load order and the dependency order:
 | `MythicPlusTimerandTools/JoinPopup.lua` | Which key did I just join |
 | `MythicPlusTimerandTools/Chat.lua` | Clickable links, and copying a chat window |
 | `MythicPlusTimerandTools/Bloodlust.lua` | Bloodlust called in chat |
+| `MythicPlusTimerandTools/BuffReminder.lua` | Missing party-buff reminder |
+| `MythicPlusTimerandTools/Notepad.lua` | Per-dungeon and per-boss note window |
+| `MythicPlusTimerandTools/Automation.lua` | Vendor, quest, and group-listing conveniences |
+| `MythicPlusTimerandTools/Social.lua` | Party from friends, queue confirm, invite on whisper, and blocking invites/duels |
+| `MythicPlusTimerandTools/KeystoneShare.lua` | Party key sharing and the "!keys" reply |
+| `MythicPlusTimerandTools/Update.lua` | Offline update reminder (version age and party-version broadcast) |
 | `MythicPlusTimerandTools/Minimap.lua` | Minimap button and its menu |
 | `MythicPlusTimerandTools/Media/minimap-icon.tga` | The minimap button and AddOns-list icon |
 | `MythicPlusTimerandTools/Options.lua` | Settings panel and `/mpt`, generated from the registries |
@@ -212,7 +259,7 @@ One file per feature. The `.toc` is the load order and the dependency order:
 | `scripts/generate-icon.mjs` | Renders the addon icon (`Media/minimap-icon.tga`) and the CurseForge image |
 | `.pkgmeta` | Tells CurseForge's packager which folder is the addon |
 | `.github/workflows/test.yml` | CI: runs `npm test` on every push and pull request |
-| `.github/workflows/release.yml` | Monthly job that keeps the interface current and tags a release |
+| `.github/workflows/release.yml` | Keep-alive job: releases when the repo has been idle 30+ days, keeping the interface current |
 
 ## Changelog
 
@@ -220,6 +267,54 @@ Kept here until the next tagged release picks it up.
 
 ### Unreleased
 
+- **Party, invites, and duels** (Automation): opt-in social handling ported from
+  Leatrix Plus, all off by default. Accept a party invite from a friend, confirm
+  the role check when a friend queues you, invite anyone who whispers a keyword
+  (default "inv", with a friends-only toggle and Battle.net whispers inviting the
+  sender), and block party invites, "requested to join" confirmations, or duels
+  from non-friends. A shared friend gate decides who counts: character and
+  Battle.net friends always, online guild members by default, community members
+  as an opt-in. Each toggle takes effect without a reload.
+- **Settings scroll**: a tab taller than the panel now scrolls, using the same
+  slim scrollbar as the Note editor, so a long tab no longer runs off the frame.
+- **Test frames become an edit mode**: the test frames now show example content
+  (the run overlay draws a full mid-key snapshot) under a light-blue Edit
+  Mode-style overlay. Drag a frame to move it, click it to jump to its settings
+  section, or press Escape to close. Reached from the General tab or `/mpt
+  frames`.
+- **Complete profile export**: the export string now includes every setting at
+  its effective value, not only the ones a profile changed, so a shared or
+  backed-up profile is fully self-contained.
+- **Copy from another profile**: a "Copy from" dropdown on the Profiles page
+  copies a chosen profile's settings into the active one, so a new profile can
+  start from an existing look rather than the defaults. An inline, fading line
+  confirms what was copied (no popup).
+- **Update reminder**: since an addon can't check the internet, it flags a likely
+  outdated version two ways: the date-stamped version being over 45 days old, or
+  a party member broadcasting a newer version (remembered account-wide in
+  `MythicPlusTimerState` and persisting until this client catches up). Shown as a
+  banner atop the Settings window and an entry in the minimap menu.
+- **Old notes kept across seasons**: dungeon and boss notes are never dropped for
+  a dungeon rotating out of the season. They stay in the store and remain listed
+  in the prepare-ahead editor, so they are still there if the dungeon returns.
+- **Any profile is deletable**: the Default profile can now be deleted like any
+  other, as long as one profile remains. Deleting the account main promotes the
+  only other profile automatically, or asks you to pick a main first when there
+  is more than one to choose from.
+- **Boxes start at the top**: the profile export box (and any other multi-line
+  box holding a lot of text) now opens scrolled to its first line instead of the
+  bottom.
+- **Resizable Note window**: the note window has a bottom-right resize grip and a
+  draggable divider that sets the section-list width; both persist per profile.
+  Frames that resize can be resized from within the test-frames edit mode too.
+- **Right-sized scrollbars**: every scrollbar thumb is now sized to the visible
+  fraction of its content (with a floor), through one shared helper, so a short
+  box no longer shows a thumb that fills it and they all match.
+- **Profiles follow the main**: a character now tracks the account main profile
+  until you switch that character to another profile yourself. Un-switched
+  characters (including brand-new ones) move with the main when it changes; a
+  switched character keeps its own choice. The resolved default is no longer
+  recorded as a per-character pin.
 - **Missing buff reminder** (Alerts): flags a class party buff missing from a
   group member, but only for classes present in the group. Configurable wait
   (15–60 s), party-chat / popup / both delivery, an anti-spam cooldown, and
@@ -264,19 +359,28 @@ Kept here until the next tagged release picks it up.
 
 ## Releases
 
-The `monthly release` workflow builds the addon zip and uploads it to
+The `keep-alive release` workflow builds the addon zip and uploads it to
 CurseForge with the BigWigsMods packager (`CF_API_KEY` secret), stamping the
 current retail Interface number and tagging the release along the way.
 `.pkgmeta` names `MythicPlusTimerandTools` as the addon folder and lists the
 repo scaffolding to leave out of the zip.
 
+What actually makes WoW/CurseForge flag an addon as out of date is the `##
+Interface:` number in the `.toc` lagging the live client, not the file's age.
+Keeping that number current for the live patch (and shipping a file for it) is
+what this workflow automates, entirely in GitHub's cloud, so it happens whether
+or not your computer is on. No external service is needed.
+
 - **CI** (`test.yml`) runs the test gate on every push and pull request.
-- **Monthly release** (`release.yml`) runs on the 1st of each month (and on
-  demand). It reads the current live retail interface number from Blizzard's own
-  version service (the live `wow` product, never the PTR), stamps it into the
-  `.toc`, re-runs the tests, commits, and pushes a `v<version>` tag. CurseForge
-  packages that tag. If nothing else changed, the fresh tag still re-publishes
-  for the live client so the addon never shows as out of date.
+- **Keep-alive release** (`release.yml`) runs a daily scheduled check, but a
+  `gate` job only lets a release through when 30+ days have passed since the last
+  commit (a manual `workflow_dispatch` always releases). So an idle repo gets a
+  fresh release every 30 days, while any commit you make resets that clock. When
+  it releases it reads the current live retail interface number from Blizzard's
+  own version service (the live `wow` product, never the PTR), stamps it into the
+  `.toc`, re-runs the tests, commits, and pushes a `v<version>` tag, then
+  packages and uploads to CurseForge. The keep-alive commit also keeps the cron
+  itself alive (GitHub suspends schedules on repos idle for 60 days).
 
 ## License
 

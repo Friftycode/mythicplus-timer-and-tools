@@ -98,6 +98,12 @@ local DEFAULTS = {
   -- The note window's section column: shown or collapsed, toggled by a button on
   -- the window itself (not a settings checkbox), so it stays out of OPTIONS.
   notepadmenu = true,
+  -- The note window's size and the width of its section column, both set by
+  -- dragging (a corner grip and the divider between the column and the note), so
+  -- like the overlay's scale they stay out of OPTIONS.
+  notepadw = 360,
+  notepadh = 260,
+  notepadcolw = 100,
 
   -- Automation: the vendor/quest/difficulty conveniences.
   autorepair = true,         -- repair on visiting a merchant
@@ -118,6 +124,22 @@ local DEFAULTS = {
   -- Reply to "!keys" in party/guild/instance chat with your own keystone link, so
   -- anyone (addon or not) can ask for it. Works without this addon on their end.
   keylink = true,
+
+  -- Social automation: party/invite/duel conveniences ported from Leatrix Plus.
+  -- Each accept/block behaviour is off by default (one acting unasked would
+  -- surprise people). Guild members count as friends by default; communities do
+  -- not, since a large community is a wider net than most people expect.
+  acceptpartyfriends = false,     -- auto accept a party invite from a friend
+  confirmqueuerole = false,       -- auto confirm the role check when a friend queues you
+  invitefromwhisper = false,      -- invite someone who whispers the keyword below
+  invitekeyword = "inv",          -- the whisper that triggers an invite
+  invitefriendsonly = true,       -- only invite friends who whisper the keyword
+  blockpartyinvites = false,      -- decline party invites from non-friends
+  blockrequestedinvites = false,  -- decline "requested to join" confirmations from non-friends
+  blockduels = false,             -- decline duel requests from non-friends
+  -- Guild members and community members count as friends for everything above.
+  friendlyguild = true,
+  friendlycommunities = false,
 }
 ns.DEFAULTS = DEFAULTS
 
@@ -165,6 +187,17 @@ ns.OPTIONS = {
   { key = "mythicwarn", group = "Automation", section = "Start a Dungeon Group", label = "Warn if not set to Mythic", tooltip = "Warn you when you enter a dungeon that is not set to Mythic difficulty." },
   { key = "keyshare", group = "Automation", section = "Start a Dungeon Group", label = "Party key dropdown", tooltip = "Share your own keystone with group members running this addon, and add a dropdown to the create-a-group panel listing everyone's keys. Pick one to fill in that dungeon and a \"+level\" title; the difficulty and playstyle stay on your defaults above." },
   { key = "keylink", group = "Chat", section = "Keystone", label = "Reply to \"!keys\" with your key", tooltip = "When someone types !keys in party, instance, or guild chat, post a link to the keystone you are carrying. Works for anyone asking, whether or not they run this addon." },
+
+  { key = "acceptpartyfriends", group = "Automation", section = "Accept from friends", label = "Accept party invites from friends", tooltip = "Automatically accept a party invite from a friend, unless you are queued for a dungeon or raid. Guild and community members can count as friends below." },
+  { key = "confirmqueuerole", group = "Automation", section = "Accept from friends", label = "Confirm role when a friend queues", tooltip = "Automatically confirm the ready/role check when the group leader who started it is a friend. Guild and community members can count as friends below." },
+  { key = "invitefromwhisper", group = "Automation", section = "Invite from whispers", label = "Invite when whispered a keyword", tooltip = "Invite anyone who whispers you the keyword below to your group, as long as you are the leader (or not in a group) and not queued." },
+  { key = "invitekeyword", type = "text", default = "inv", group = "Automation", section = "Invite from whispers", label = "Keyword", tooltip = "The whisper that triggers an invite. Case is ignored. Defaults to \"inv\"." },
+  { key = "invitefriendsonly", group = "Automation", section = "Invite from whispers", label = "Only invite friends", tooltip = "Only send an invite when the person who whispered the keyword is a friend. Turn off to invite anyone who whispers it. Battle.net whispers always invite the friend who sent them." },
+  { key = "blockpartyinvites", group = "Automation", section = "Block", label = "Block party invites", tooltip = "Decline party invites from anyone who is not a friend. Guild and community members can count as friends below." },
+  { key = "blockrequestedinvites", group = "Automation", section = "Block", label = "Block requested invites", tooltip = "Decline \"has requested to join your group\" confirmations from anyone who is not a friend, such as clicks on your group listing. Guild and community members can count as friends below." },
+  { key = "blockduels", group = "Automation", section = "Block", label = "Block duels", tooltip = "Decline duel requests from anyone who is not a friend. Guild and community members can count as friends below." },
+  { key = "friendlyguild", group = "Automation", section = "Also count as friends", label = "Treat guild members as friends", tooltip = "Count online guild members as friends for the accept, invite, and block options above. New members may need a roster refresh (press J) before they are recognised." },
+  { key = "friendlycommunities", group = "Automation", section = "Also count as friends", label = "Treat community members as friends", tooltip = "Count online members of your communities as friends for the accept, invite, and block options above." },
 }
 
 -- Drawn under the tab strip: a tab name alone does not say what it changes.
@@ -174,7 +207,7 @@ ns.TAB_DESC = {
   ["Chat"] = "What it adds to your chat windows.",
   ["Alerts"] = "Notices that appear on screen while you play.",
   ["Note"] = "Per-dungeon notes: a general dungeon note plus a note per boss, and where to prepare them ahead of time.",
-  ["Automation"] = "Small conveniences at merchants, quest givers, and the group finder.",
+  ["Automation"] = "Hands-off conveniences: merchants, quest givers, the group finder, and handling invites, whispers, and duels from other players.",
   ["General"] = "The minimap button, the movable test frames, and other addon-wide settings.",
   ["About"] = "Which version you are on, and where to find the addon.",
 }
@@ -238,6 +271,9 @@ local function cleanProfile(src)
   if type(clean.buffcooldownmins) == "number" then
     clean.buffcooldownmins = math.max(1, math.min(30, math.floor(clean.buffcooldownmins + 0.5)))
   end
+  if type(clean.notepadw) == "number" then clean.notepadw = math.max(260, math.min(900, clean.notepadw)) end
+  if type(clean.notepadh) == "number" then clean.notepadh = math.max(160, math.min(800, clean.notepadh)) end
+  if type(clean.notepadcolw) == "number" then clean.notepadcolw = math.max(60, math.min(260, clean.notepadcolw)) end
   -- Choice keys accept only their known values; anything else falls to default.
   local CHOICES = {
     buffdelivery = { chat = true, popup = true, both = true },
@@ -259,18 +295,24 @@ local function cleanProfile(src)
   return clean
 end
 
--- Picks the profile for the current character: the one it last used, else the
--- account's main profile, else Default. Records the choice so it sticks.
+-- Picks the profile for the current character. A character sticks to a profile
+-- only once it has been switched to one explicitly (loadProfile records that in
+-- charProfile). Until then it is un-pinned and follows the account main, so
+-- renaming or changing main moves every un-pinned character with it, and a
+-- brand-new character starts on the current main. Falls back to Default before
+-- any main is set. This does not write charProfile: the auto-resolved choice is
+-- deliberately not recorded, or it would pin the character to whatever main was
+-- at first login.
 local function resolveActiveProfile()
   local c = config()
-  local name = c.charProfile[charKey()]
-  if type(c.profiles[name]) ~= "table" then name = nil end
+  local pinned = c.charProfile[charKey()]
+  if type(c.profiles[pinned]) ~= "table" then pinned = nil end
+  local name = pinned
   if not name and c.mainProfile and type(c.profiles[c.mainProfile]) == "table" then
     name = c.mainProfile
   end
   name = name or DEFAULT_PROFILE
   ensureProfile(name)
-  c.charProfile[charKey()] = name
   if not c.mainProfile then c.mainProfile = name end
   activeProfile = name
   return name
@@ -395,7 +437,15 @@ function ns.exportProfile(name)
       lines[#lines + 1] = k .. "=p:" .. v.point .. "," .. tostring(v.x) .. "," .. tostring(v.y)
     end
   end
-  for k in pairs(DEFAULTS) do if t[k] ~= nil then emit(k, t[k]) end end
+  -- Every setting, at its effective value: the profile's own when it set one,
+  -- otherwise the default. So the string is complete and self-contained, and an
+  -- import reproduces the same state whatever a later version's defaults become.
+  for k, def in pairs(DEFAULTS) do
+    local v = t[k]
+    if v == nil then v = def end
+    emit(k, v)
+  end
+  -- Positions have no default (nil), so only a set one is worth carrying.
   for _, k in ipairs(POINT_KEYS) do if t[k] ~= nil then emit(k, t[k]) end end
   return table.concat(lines, "\n")
 end
@@ -518,9 +568,12 @@ end
 
 -- A draggable frame, so the shared surfaces can put every movable frame up at
 -- once for positioning. `show`/`hide` take no args and must not disturb a real
--- one already on screen.
-function ns.previewFrame(name, show, hide)
-  ns.previews[#ns.previews + 1] = { name = name, show = show, hide = hide }
+-- one already on screen. `getFrame` returns the frame itself (for the edit-mode
+-- overlay to attach to), and `target` is { group, section } naming where the
+-- overlay's "Click to edit" jumps to in Settings.
+function ns.previewFrame(name, show, hide, getFrame, target)
+  ns.previews[#ns.previews + 1] =
+    { name = name, show = show, hide = hide, getFrame = getFrame, target = target }
 end
 
 -- ── Small helpers ────────────────────────────────────────────────────────

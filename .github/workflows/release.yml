@@ -1,15 +1,27 @@
-name: monthly release
+name: keep-alive release
 
-# Keeps the shipped .toc Interface number current and cuts a dated release every
-# month. Delivery is the BigWigsMods packager step below: it builds the addon
-# zip and uploads it to CurseForge with CF_API_KEY. CurseForge repo integration
-# is deliberately not used (no package webhook), so the pushed tag by itself
-# deploys nothing -- it exists for the changelog and a versioned GitHub ref. The
-# "empty" build (nothing changed but the version) still re-uploads for the live
-# client so the addon never shows as out of date.
+# Keeps the addon from ever showing as out of date without any manual work, and
+# without your computer being on: GitHub runs this in the cloud on a schedule.
+#
+# What actually makes WoW/CurseForge flag an addon "out of date" is the `##
+# Interface:` number in the .toc lagging the live client, not the file's age. So
+# the fix is to periodically re-stamp the current Interface and re-upload a file
+# for the current patch. This does exactly that.
+#
+# Cadence: the schedule fires daily, but the `gate` job only lets a release
+# through when 30+ days have passed since the last commit. Any commit you make
+# (or a release this workflow cuts, which commits the version bump) resets that
+# 30-day clock, so releases happen only when the repo has otherwise been idle.
+# The 30-day keep-alive commit also keeps the schedule itself alive (GitHub
+# suspends cron on repos with 60 days of no activity).
+#
+# Delivery is the BigWigsMods packager step: it builds the zip and uploads it to
+# CurseForge with CF_API_KEY. CurseForge repo integration is deliberately not
+# used (no package webhook), so the pushed tag by itself deploys nothing -- it
+# exists for the changelog and a versioned GitHub ref.
 on:
   schedule:
-    - cron: "0 12 1 * *" # 12:00 UTC on the 1st of each month
+    - cron: "0 12 * * *" # 12:00 UTC daily; the gate decides whether to release
   workflow_dispatch:
     inputs:
       version:
@@ -24,7 +36,38 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Decides whether a release is due. A manual run always passes; a scheduled run
+  # passes only when the last commit is at least 30 days old.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.check.outputs.go }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need history to read the last commit's date
+      - id: check
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual run: releasing."
+            echo "go=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          LAST=$(git log -1 --format=%ct)
+          NOW=$(date -u +%s)
+          DAYS=$(( (NOW - LAST) / 86400 ))
+          echo "Days since last commit: $DAYS"
+          if [ "$DAYS" -ge 30 ]; then
+            echo "Idle 30+ days: cutting a keep-alive release."
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Recent activity: nothing to do."
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          fi
+
   release:
+    needs: gate
+    if: ${{ needs.gate.outputs.go == 'true' }}
     runs-on: ubuntu-latest
     # A step's `if` cannot read `secrets`, so surface the key here and test that.
     env:

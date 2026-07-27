@@ -335,4 +335,4 @@ end, function()
   brPreviewing = false
   brHideAt = nil
   if brFrame then brFrame:Hide() end
-end)
+end, function() return brFrame end, { group = "Alerts", section = "Buff reminder" })

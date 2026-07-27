@@ -32,7 +32,7 @@ local keys, boxCount = {}, 0
 for _, page in pairs(settingsPages) do
   for key in pairs(page.checks) do keys[key] = true; boxCount = boxCount + 1 end
 end
-ok(boxCount == 33, "thirty-three checkboxes drawn, got " .. boxCount)
+ok(boxCount == 42, "forty-two checkboxes drawn, got " .. boxCount)
 ok(keys.mythicplustimer and keys.autonameplates and keys.letmefocus and keys.guildkeys
   and keys.autoslotkey and keys.joinpopup and keys.seasontp and keys.chatlinks
   and keys.chatcopy and keys.bloodlust and keys.minimapbutton,
@@ -781,8 +781,23 @@ ok(overlay():IsShown(), "the button puts the run overlay on screen")
 ok(popup():IsShown(), "and the join popup")
 ok(lust():IsShown(), "and the bloodlust alert")
 has(Mock.rendered(lust()), "Test", "the alert marks itself as a test")
-has(Mock.rendered(overlay()), "Preview", "so does the overlay")
+has(Mock.rendered(overlay()), "Ara-Kara", "so does the overlay")
 has(Mock.rendered(popup()), "Preview", "and the popup")
+-- The overlay's example content is populated, not an empty shell.
+has(Mock.rendered(overlay()), "Enemy forces", "the overlay shows example enemy forces")
+has(Mock.rendered(overlay()), "9 total", "and example deaths for each member")
+
+-- Edit mode: each test frame wears a light-blue overlay you click to jump to its
+-- settings, which closes edit mode and opens the panel.
+ok(overlay().mptEdit ~= nil and overlay().mptEdit:IsShown(), "the run overlay wears an edit overlay")
+ok(type(overlay().mptEditPassthrough) == "table" and #overlay().mptEditPassthrough >= 1,
+  "the overlay keeps its resize grip usable under the edit overlay")
+ok(type(MythicPlusTimerNamespace.showSettingsSection) == "function", "a settings-section jump is exposed")
+overlay().mptEdit.__scripts.OnClick(overlay().mptEdit)
+ok(overlay():IsShown() == false, "clicking an edit overlay closes edit mode")
+ok(Mock.settings.opened, "and opens the settings panel")
+-- Reopen edit mode for the drag assertions below.
+testBtn.__scripts.OnClick(testBtn)
 
 -- The copy box is opened by clicking the thing you want copied, so it is
 -- deliberately not one of the frames this puts up.
@@ -833,20 +848,20 @@ overlay().timeZone.__scripts.OnClick(overlay().timeZone)
 local focused = Mock.rendered(overlay())
 has(focused, "Hidden", "clicking the clock hides it")
 hasNot(focused, "elapsed", "and the elapsed row with it")
-has(focused, "0 total", "the deaths are a separate click and stay")
+has(focused, "9 total", "the deaths are a separate click and stay")
 ok(MythicPlusTimerNamespace.cfg("focushidetime") == true, "which half is hidden survives a reload")
 
 overlay().deathZone.__scripts.OnClick(overlay().deathZone)
 focused = Mock.rendered(overlay())
 has(focused, "Deaths", "the deaths keep their heading when hidden")
-hasNot(focused, "0 total", "but not their count")
+hasNot(focused, "9 total", "but not their count")
 
 overlay().timeZone.__scripts.OnClick(overlay().timeZone)
 overlay().deathZone.__scripts.OnClick(overlay().deathZone)
 focused = Mock.rendered(overlay())
 hasNot(focused, "Hidden", "clicking each again brings both back")
 has(focused, "elapsed", "the clock is counted again")
-has(focused, "0 total", "and so are the deaths")
+has(focused, "9 total", "and so are the deaths")
 
 MythicPlusTimerNamespace.setCfg("letmefocus", false)
 MythicPlusTimerNamespace.optionChanged.letmefocus()
@@ -945,6 +960,39 @@ ok(imported ~= nil and ns.activeProfile() == imported, "importing a string creat
 ok(ns.cfg("chatlinks") == false and ns.cfg("mpscale") == 1.5, "the imported profile carries the exported values")
 ok(ns.importProfile("not one of ours") == nil, "a foreign string imports nothing")
 
+-- Export is complete: every setting key is present even at its default, so the
+-- string is self-contained (spot-check one from each newer feature area).
+for _, key in ipairs({ "blockduels", "invitekeyword", "friendlyguild", "buffreminder", "autorepair" }) do
+  ok(exported:find("\n" .. key .. "=", 1, true) ~= nil, "export includes '" .. key .. "' even at default")
+end
+
+-- Scrollbar thumbs are sized to the visible fraction of the content, with a
+-- floor, so a short box never gets a thumb that fills it.
+local dummyThumb = { h = 0, SetHeight = function(self, v) self.h = v end }
+ns.sizeScrollThumb(dummyThumb, 46, 200)
+ok(dummyThumb.h == 18, "a mostly-overflowing short box gets the minimum thumb, not a full one")
+ns.sizeScrollThumb(dummyThumb, 400, 700)
+ok(dummyThumb.h > 100 and dummyThumb.h < 400, "a taller view gets a proportionally taller thumb")
+
+-- Update reminder: a group member on a newer version is proof (and beats age);
+-- otherwise a version older than the age threshold flags. Pure, clock-injected.
+local vEpoch = time({ year = 2026, month = 7, day = 24, hour = 12 })
+ok(ns.updateStatusFor("2026.7.24", nil, vEpoch) == nil, "a fresh version with no newer peer is up to date")
+ok(ns.updateStatusFor("2026.7.24", nil, vEpoch + 10 * 86400) == nil, "ten days old does not flag yet")
+ok(ns.updateStatusFor("2026.7.24", nil, vEpoch + 50 * 86400).reason == "age", "a version 50 days old flags by age")
+local peer = ns.updateStatusFor("2026.7.24", "2026.9.1", vEpoch)
+ok(peer and peer.reason == "peer", "a newer peer version flags regardless of age")
+ok(ns.updateStatusFor("2026.9.1", "2026.7.24", vEpoch) == nil, "an older seen version is not treated as newer")
+
+-- noteNewerVersion remembers only a strictly newer version (local is 2026.7.24
+-- in the mock metadata), account-wide so it persists and keeps reminding.
+MythicPlusTimerState = {}
+ns.noteNewerVersion("2026.7.20")
+ok(MythicPlusTimerState.newerVersion == nil, "an older peer version is not remembered")
+ns.noteNewerVersion("2026.8.5")
+ok(MythicPlusTimerState.newerVersion == "2026.8.5", "a newer peer version is remembered")
+MythicPlusTimerState = nil
+
 ns.loadProfile("Default")
 ns.deleteProfile("Raid")
 local remaining = {}
@@ -1033,7 +1081,48 @@ for _, r in ipairs(profiles.rows) do if r.profile == "Default" and r:IsShown() t
 ok(defaultRow ~= nil, "the profile list has a row per profile")
 defaultRow.__scripts.OnClick(defaultRow)
 ok(ns.activeProfile() == "Default", "clicking a profile row loads it")
-ns.deleteProfile("UI Test")
+
+-- Copy-from pulls another profile's settings into the active one. UI Test keeps
+-- guildkeys off; copying it into the active Default turns Default's off too.
+ns.loadProfile("UI Test"); ns.setCfg("guildkeys", false)
+ns.loadProfile("Default"); ns.setCfg("guildkeys", true)
+profiles.refresh()
+local listsActive = false
+for _, c in ipairs(profiles.copyDD.choices) do if c.value == "Default" then listsActive = true end end
+ok(not listsActive, "the copy-from list leaves out the active profile")
+profiles.copyDD.onSelect("UI Test")
+ok(ns.activeProfile() == "Default" and ns.cfg("guildkeys") == false,
+  "copy-from overwrites the active profile with another's settings")
+ok(profiles.copyMsg:GetText():find("UI Test", 1, true) ~= nil,
+  "an inline confirmation names what was copied (no popup)")
+
+-- Delete via the button applies the main-profile policy. Reduce to a known
+-- two-profile state first: Default (main, active) plus one other ("UI Test").
+for _, n in ipairs(ns.profileNames()) do
+  if n ~= "Default" and n ~= "UI Test" then ns.deleteProfile(n) end
+end
+ns.setMainProfile("Default")
+ns.loadProfile("Default")
+-- Deleting the active main with exactly one other promotes that other, then
+-- removes Default.
+profiles.refresh()
+ok(profiles.deleteBtn:IsEnabled(), "delete is allowed once a second profile exists")
+profiles.deleteBtn.__scripts.OnClick(profiles.deleteBtn)
+local names = {}
+for _, n in ipairs(ns.profileNames()) do names[n] = true end
+ok(not names["Default"], "the Default profile can be deleted when another remains")
+ok(ns.mainProfile() == "UI Test", "the only other profile is promoted to main")
+
+-- With several other profiles, deleting the main can't guess a replacement, so
+-- nothing is removed until a main is chosen.
+ns.createProfile("Alt A")
+ns.createProfile("Alt B")
+ns.setMainProfile("UI Test")
+ns.loadProfile("UI Test")
+local before = #ns.profileNames()
+profiles.deleteBtn.__scripts.OnClick(profiles.deleteBtn)
+ok(#ns.profileNames() == before, "deleting the main is refused while several others could be main")
+-- The next section resets the whole config, so no cleanup is needed here.
 
 -- ── Default profile shared across characters ───────────────────────────────
 -- The config is account-wide, so "Default" is one shared set of settings until a
@@ -1074,6 +1163,27 @@ Mock.setChar("Bravo", "RealmOne")
 Mock.fire("PLAYER_LOGIN")
 ok(ns.activeProfile() == "Bravo PvE", "a character on its own profile keeps it")
 ok(ns.cfg("bloodlust") == true, "along with that profile's own settings")
+
+-- Un-pinned characters follow the account main; a manual switch pins a character
+-- and survives a later main change. This mirrors: first login sets the main,
+-- a renamed/new main is what fresh characters start on, and a character switched
+-- to another profile keeps it until switched again.
+MythicPlusTimerConfig = nil
+Mock.setChar("Uno", "R")
+Mock.fire("PLAYER_LOGIN")
+ns.createProfile("Frifty")        -- Uno makes and switches to its own profile
+ns.setMainProfile("Frifty")       -- and makes it the account main
+Mock.setChar("Dos", "R")
+Mock.fire("PLAYER_LOGIN")
+ok(ns.activeProfile() == "Frifty", "a new character starts on the current main, not Default")
+ns.loadProfile("Default")         -- Dos switches itself to Default
+ok(ns.activeProfile() == "Default", "a character can switch to another profile")
+Mock.setChar("Tres", "R")
+Mock.fire("PLAYER_LOGIN")
+ok(ns.activeProfile() == "Frifty", "a third new character also follows the main")
+Mock.setChar("Dos", "R")
+Mock.fire("PLAYER_LOGIN")
+ok(ns.activeProfile() == "Default", "the switched character keeps its own choice after main changed")
 
 -- ── New features (buffs, notepad, automation, bar ticks) ───────────────────
 -- A clean run for the tick-mark and later feature checks.
@@ -1265,6 +1375,23 @@ ok(note.contentW > narrowBefore, "the note reclaims the column's width when it i
 toggleMenu()
 ok(note.col:IsShown() and ns.cfg("notepadmenu") == true, "clicking again brings the column back")
 
+-- The window is resizable and the section column has an adjustable width. Both
+-- are saved and reflowed: a wider window gives the note more room; a wider column
+-- takes it back.
+ok(note.resize ~= nil and note.colDrag ~= nil, "the note window has a resize grip and a column divider")
+local roomBefore = note.contentW
+note:SetSize(note:GetWidth() + 120, note:GetHeight())
+note.__scripts.OnSizeChanged(note)
+ok(note.contentW > roomBefore, "widening the window gives the note more room")
+note.resize.__scripts.OnMouseUp(note.resize)
+ok(ns.cfg("notepadw") == note:GetWidth(), "releasing the resize grip saves the new width")
+local roomWide = note.contentW
+ns.setCfg("notepadcolw", ns.cfg("notepadcolw") + 60)
+-- Toggling the column off and back on re-runs the same layout that a divider
+-- drag would, now with the wider column saved.
+toggleMenu(); toggleMenu()
+ok(note.contentW < roomWide, "a wider section column leaves the note less room")
+
 -- An old flat-string note is migrated into the dungeon slot on next visit.
 MythicPlusTimerNotes[777] = "legacy note"
 Mock.state.ejInstance = 777
@@ -1273,10 +1400,19 @@ ok(type(MythicPlusTimerNotes[777]) == "table" and MythicPlusTimerNotes[777].dung
   "a legacy flat-string note becomes the dungeon note")
 Mock.state.ejInstance = 500
 
+-- A note saved for a dungeon that has rotated out of the current tiers is kept
+-- and stays listed (never deleted for being out of season), so it is still there
+-- if the dungeon returns.
+MythicPlusTimerNotes[900] = { dungeon = "kept from an old season", bosses = {} }
+
 -- Prepare-ahead: the shared note API lists dungeons and edits their notes without
 -- being in the dungeon, and the in-window note reads the same store.
 local dungeons = ns.noteDungeonList()
 ok(#dungeons >= 2, "the prepare-ahead picker lists dungeons, got " .. #dungeons)
+local hasRetired = false
+for _, d in ipairs(dungeons) do if d.key == 900 then hasRetired = true end end
+ok(hasRetired, "a dungeon with saved notes is listed even when out of the current tiers")
+ok(ns.noteGet(900, "dungeon") == "kept from an old season", "and its old note is still readable")
 ns.noteSet(501, "dungeon", "prepared before the run")
 ok(ns.noteGet(501, "dungeon") == "prepared before the run", "a dungeon can be noted ahead of time")
 local sections501 = ns.noteSectionList(501)

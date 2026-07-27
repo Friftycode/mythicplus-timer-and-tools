@@ -68,6 +68,17 @@ local function openMenu(owner)
   end
   pcall(MenuUtil.CreateContextMenu, owner, function(_, root)
     root:CreateTitle("Mythic+ Timer and Tools")
+    -- A newer version is likely out (this one is old, or a group member has one).
+    local status = type(ns.updateStatus) == "function" and ns.updateStatus()
+    if status then
+      root:CreateButton(ns.RED .. "Update available" .. ENDC, function()
+        ns.print(status.message)
+        if ns.openSettings then ns.openSettings() end
+        -- Land on the About tab, where the CurseForge and GitHub links are.
+        if type(ns.showSettingsSection) == "function" then ns.showSettingsSection("About") end
+      end)
+      root:CreateDivider()
+    end
     root:CreateButton("Settings", function()
       if ns.openSettings then ns.openSettings() end
     end)

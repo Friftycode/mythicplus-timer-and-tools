@@ -8,7 +8,7 @@ A Mythic+ timer, plus the small stuff that usually means extra work or a second 
 - **Let me focus:** Click the timer or the death count to hide it for a pull. Click again to bring it back.
 - **Auto-slot your key:** Drops your keystone into the font when you open it.
 - **Enemy nameplates:** Flips them on when the key starts, then restores your previous setting when it ends.
-- **Notes:** One per dungeon and one per boss, with basic formatting. Swaps to the boss note when you pull and back afterwards.
+- **Notes:** One per dungeon and one per boss, with basic formatting. Swaps to the boss note when you pull and back afterwards. Resize the window and drag the divider to set how wide the section list is. Notes are kept when a dungeon leaves the season, so they are still there if it comes back.
 
 ### **With your group**
 
@@ -18,6 +18,9 @@ A Mythic+ timer, plus the small stuff that usually means extra work or a second 
 - **Group Finder invites:** When you get invited to a group it shows the dungeon, leader, group note, and a teleport button if you've unlocked it.
 - **Missing buff reminder:** Warns you when someone is missing their class buff, only for classes actually in the group. Choose party chat, a popup, or both, and configure which buffs to check and how often.
 - **Bloodlust alert:** Shows a popup when someone types bl, hero, lust, drums, etc.
+- **Friend invites:** Auto-accepts a party invite from a friend, and confirms the role check when a friend queues you.
+- **Invite on whisper:** Invites anyone who whispers your keyword (default "inv"). Friends only if you want.
+- **Block invites and duels:** Turns away party invites, join requests, and duels from anyone who isn't a friend. Guild members count as friends; communities are optional.
 
 ### **Extras**
 
@@ -27,7 +30,7 @@ A Mythic+ timer, plus the small stuff that usually means extra work or a second 
 - **Quest givers:** Automatically accepts and turns in quests, everywhere or only in dungeons.
 - **Chat:** Makes links click to copy, and adds a Copy button to every chat tab.
 - **Minimap button:** Opens the options and toggles Let me focus. Drag it to move it, or hide it completely.
-- **Test mode:** Shows all movable frames at once so you can position and resize everything before starting a key.
+- **Test mode:** Shows all movable frames at once, each with example content and a light-blue overlay like Blizzard's Edit Mode. Drag a frame to move it, resize it from its grip, or click it to jump straight to its settings. Escape closes it.
 
 ### **Commands**
 

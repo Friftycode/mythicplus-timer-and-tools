@@ -473,6 +473,10 @@ function EJ_GetInstanceByIndex(i, isRaid)
   if not d then return nil end
   return d.instID, d.name
 end
+-- Resolves a name for any instance id (even one not in the current tiers), so a
+-- saved note for a rotated-out dungeon can still be labelled.
+Mock.ejInstanceNames = { [500] = "Test Dungeon", [501] = "Other Dungeon", [900] = "Retired Dungeon" }
+function EJ_GetInstanceInfo() return Mock.ejInstanceNames[Mock.state.ejSelected] end
 
 -- Nameplates, for the note window's "follow the fight" proximity check.
 Mock.namePlates = {}

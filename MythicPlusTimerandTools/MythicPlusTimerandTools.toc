@@ -3,7 +3,7 @@
 ## Notes: Movable Mythic+ run overlay: time remaining, the +2/+3 upgrade windows, enemy forces, bosses, and deaths. Plus your guild's keys this week.
 ## Author: Friftycode
 ## Version: 2026.7.27
-## SavedVariables: MythicPlusTimerConfig, MythicPlusTimerRun, MythicPlusTimerNotes
+## SavedVariables: MythicPlusTimerConfig, MythicPlusTimerRun, MythicPlusTimerNotes, MythicPlusTimerState
 ## X-Curse-Project-ID: 1623279
 ## IconTexture: Interface\AddOns\MythicPlusTimerandTools\Media\minimap-icon.tga
 ## X-License: MIT
@@ -37,7 +37,9 @@ Bloodlust.lua
 BuffReminder.lua
 Notepad.lua
 Automation.lua
+Social.lua
 KeystoneShare.lua
+Update.lua
 Minimap.lua
 Options.lua
 Panel.lua

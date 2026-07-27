@@ -63,21 +63,142 @@ function ns.openSettings()
   return false
 end
 
--- ── Test frames ───────────────────────────────────────────────────────────
--- Puts every registered preview frame on screen at once for positioning, and
--- takes them away again. Knows nothing about which frames exist.
+-- ── Test frames (edit mode) ─────────────────────────────────────────────────
+-- Puts every registered preview frame on screen at once for positioning, each
+-- under a light-blue overlay like Blizzard's Edit Mode: drag it to move, hover
+-- it for "Click to edit", click it to jump to its settings. Knows nothing about
+-- which frames exist beyond what each registered.
 
-local previewShown = false
+local GOLD = ns.GOLD
 
-local function togglePreviews()
-  previewShown = not previewShown
-  for _, p in ipairs(ns.previews) do
-    pcall(previewShown and p.show or p.hide)
-  end
+-- "run overlay" -> "Run overlay". The registered names are already readable; just
+-- give them a capital.
+local function titleCase(name)
+  return (tostring(name or ""):gsub("^%l", string.upper))
 end
 
+-- The blue wash sits on the frame; brighter on hover. Kept dim enough that the
+-- example content underneath still reads through it.
+local TINT = { 0.12, 0.55, 0.95, 0.25 }
+local TINT_HOVER = { 0.20, 0.62, 1.0, 0.42 }
+local function tint(tex, c) tex:SetColorTexture(c[1], c[2], c[3], c[4]) end
+
+-- Declared before the closures below so they capture these upvalues, not globals.
+local previewShown = false
+local setPreviews  -- forward declaration: the Esc catcher and overlay call it
+
+-- Lays the overlay over `frame` (once, then reused). Drag forwards to the
+-- frame's own move scripts so the position saves exactly as a normal drag would;
+-- a plain click (no drag) jumps to the frame's settings section.
+local function attachEditOverlay(frame, preview)
+  if not frame then return end
+  local o = frame.mptEdit
+  if not o then
+    o = CreateFrame("Button", nil, frame)
+    o:SetAllPoints(frame)
+    -- Stay in the frame's own strata (the alert pop-ups sit above HIGH, so a
+    -- fixed strata would put the overlay behind them); just sit a few levels up
+    -- so the wash and label draw over the frame's content.
+    local ok, strata = pcall(frame.GetFrameStrata, frame)
+    if ok and strata then o:SetFrameStrata(strata) end
+    local okL, level = pcall(frame.GetFrameLevel, frame)
+    o:SetFrameLevel(((okL and level) or 1) + 10)
+    o:RegisterForDrag("LeftButton")
+    o.bg = o:CreateTexture(nil, "BACKGROUND")
+    o.bg:SetAllPoints()
+    o.title = o:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    o.title:SetPoint("CENTER", 0, 7)
+    o.hint = o:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    o.hint:SetPoint("CENTER", 0, -12)
+    o.hint:SetText(GOLD .. "Click to edit" .. ENDC)
+    o.hint:Hide()
+    o:SetScript("OnEnter", function(self)
+      tint(self.bg, TINT_HOVER); self.hint:Show()
+    end)
+    o:SetScript("OnLeave", function(self)
+      tint(self.bg, TINT); self.hint:Hide()
+    end)
+    -- Forward drags to the frame's own drag handlers, so StartMoving and the
+    -- feature's savePosition both run just as they would without the overlay.
+    o:SetScript("OnDragStart", function()
+      local fn = frame:GetScript("OnDragStart")
+      if fn then fn(frame) elseif frame.StartMoving then frame:StartMoving() end
+    end)
+    o:SetScript("OnDragStop", function()
+      local fn = frame:GetScript("OnDragStop")
+      if fn then fn(frame) elseif frame.StopMovingOrSizing then frame:StopMovingOrSizing() end
+    end)
+    o:SetScript("OnClick", function(self)
+      setPreviews(false)
+      ns.openSettings()
+      local t = self.target
+      if t and type(ns.showSettingsSection) == "function" then
+        ns.showSettingsSection(t.group, t.section)
+      end
+    end)
+    frame.mptEdit = o
+  end
+  -- Re-assert placement each time: an alert frame may have raised itself when it
+  -- was shown for the preview, which would otherwise leave the overlay behind it.
+  local okS, strata = pcall(frame.GetFrameStrata, frame)
+  if okS and strata then o:SetFrameStrata(strata) end
+  local okL, level = pcall(frame.GetFrameLevel, frame)
+  o:SetFrameLevel(((okL and level) or 1) + 10)
+  -- Keep a frame's own controls that must still work in edit mode (a resize grip,
+  -- the note's column divider) above the overlay, so they take the click there.
+  for _, ctrl in ipairs(frame.mptEditPassthrough or {}) do
+    pcall(function()
+      ctrl:SetFrameStrata(o:GetFrameStrata())
+      ctrl:SetFrameLevel(o:GetFrameLevel() + 2)
+    end)
+  end
+  o.target = preview.target
+  o.title:SetText(GOLD .. titleCase(preview.name) .. ENDC)
+  tint(o.bg, TINT)
+  o.hint:Hide()
+  o:Show()
+end
+
+local function hideEditOverlay(frame)
+  if frame and frame.mptEdit then frame.mptEdit:Hide() end
+end
+
+-- A named, hidden frame in UISpecialFrames so Escape closes edit mode the way it
+-- closes any panel: Escape hides this frame, its OnHide switches previews off.
+local escCatcher
+local function ensureEscCatcher()
+  if escCatcher then return end
+  escCatcher = CreateFrame("Frame", "MythicPlusTimerEditModeEsc", UIParent)
+  escCatcher:Hide()
+  if type(UISpecialFrames) == "table" then
+    table.insert(UISpecialFrames, "MythicPlusTimerEditModeEsc")
+  end
+  escCatcher:SetScript("OnHide", function()
+    if previewShown then setPreviews(false) end
+  end)
+end
+
+setPreviews = function(on)
+  if on == previewShown then return end
+  previewShown = on
+  for _, p in ipairs(ns.previews) do
+    pcall(on and p.show or p.hide)
+    local ok, frame = false, nil
+    if p.getFrame then ok, frame = pcall(p.getFrame) end
+    if on and ok and frame then
+      pcall(attachEditOverlay, frame, p)
+    elseif not on and ok then
+      pcall(hideEditOverlay, frame)
+    end
+  end
+  ensureEscCatcher()
+  if on then escCatcher:Show() else escCatcher:Hide() end
+end
+
+local function togglePreviews() setPreviews(not previewShown) end
+
 ns.optionButton("Test frames", "Show or hide test frames",
-  "Put every movable frame on screen at once so you can drag them where you want them. Use it again to hide them.",
+  "Put every movable frame on screen at once so you can drag them where you want them. Each frame shows an edit overlay: drag it to move, or click it to jump to its settings. Press Escape to close.",
   togglePreviews)
 
 ns.command("frames", "show or hide the test frames", togglePreviews)

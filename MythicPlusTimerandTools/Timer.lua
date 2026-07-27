@@ -433,6 +433,9 @@ local function ensureMPlusFrame()
   end)
   f.grip:SetScript("OnMouseUp", mpEndResize)
   f.grip:SetScript("OnHide", mpEndResize)
+  -- Kept usable under the edit-mode overlay so the overlay can still be resized
+  -- while the test frames are up.
+  f.mptEditPassthrough = { f.grip }
 
   mpApplyLock(f)
   f.cells = {}
@@ -1004,20 +1007,62 @@ ns.onOptionChanged("letmefocus", function()
   if mpFrame and mpFrame:IsShown() then pcall(mpRender) end
 end)
 
--- Preview frame for positioning: an empty overlay, drawn only when no run is
--- live. mpStart rebuilds all of this for the next real run.
+-- Preview frame for positioning: a mid-run snapshot so every block (clock,
+-- upgrade windows, forces, bosses, deaths) shows real-looking content instead of
+-- an empty shell. Drawn only when no run is live; mpStart rebuilds all of this
+-- for the next real run.
 local mpPreviewing = false
+
+-- This week's affixes when the client will tell us, so the icons match; a static
+-- set otherwise, which the render falls back to naming if an icon won't resolve.
+local function mpPreviewAffixes()
+  local ids = {}
+  if C_MythicPlus and C_MythicPlus.GetCurrentAffixes then
+    local ok, list = pcall(C_MythicPlus.GetCurrentAffixes)
+    if ok and type(list) == "table" then
+      for _, a in ipairs(list) do if a and a.id then ids[#ids + 1] = a.id end end
+    end
+  end
+  if #ids == 0 then ids = { 10, 9, 147 } end
+  return ids
+end
+
+local function mpLoadPreviewData()
+  mp.dungeonName, mp.level, mp.timeLimit = "Ara-Kara, City of Echoes", 12, 1980
+  mp.affixIDs = mpPreviewAffixes()
+  -- A fixed elapsed so the clock reads a steady figure without a running anchor.
+  mp.frozenElapsed = 612
+  mp.forcesIndex = 1
+  mp.criteria = {
+    { isForces = true, quantity = 235, totalQuantity = 286, completed = false },
+    { desc = "Avanoxx", completed = true, killElapsed = 214 },
+    { desc = "Anub'zekt", completed = true, killElapsed = 468 },
+    { desc = "Ki'katal the Harvester", completed = false },
+  }
+  mp.numCriteria = 4
+  mp.deathOrder = { "Frifti", "Vxmpi", "Daeihossein", "Samstmage", "Unholymaster" }
+  mp.deathByName = {
+    Frifti = { count = 2, class = "MAGE" },
+    Vxmpi = { count = 1, class = "ROGUE" },
+    Daeihossein = { count = 3, class = "PRIEST" },
+    Samstmage = { count = 1, class = "SHAMAN" },
+    Unholymaster = { count = 2, class = "DEATHKNIGHT" },
+  }
+  mp.deathTotal = 9
+end
+
 ns.previewFrame("run overlay", function()
   if mp.active or mpPreviewing then return end
   mpPreviewing = true
-  mp.dungeonName, mp.level, mp.timeLimit, mp.affixIDs = "Preview", nil, 0, nil
-  mp.criteria, mp.numCriteria, mp.forcesIndex = {}, 0, nil
-  mp.deathTotal, mp.deathByName, mp.deathOrder = 0, {}, {}
+  mpLoadPreviewData()
   ensureMPlusFrame():Show()
   mpRender()
 end, function()
   if not mpPreviewing then return end
   mpPreviewing = false
-  mp.dungeonName, mp.level = nil, nil
+  mp.dungeonName, mp.level, mp.timeLimit, mp.affixIDs = nil, nil, 0, nil
+  mp.frozenElapsed = nil
+  mp.criteria, mp.numCriteria, mp.forcesIndex = {}, 0, nil
+  mp.deathTotal, mp.deathByName, mp.deathOrder = 0, {}, {}
   if mpFrame then mpFrame:Hide() end
-end)
+end, function() return mpFrame end, { group = "Mythic+ timer", section = "The overlay" })

@@ -43,6 +43,17 @@ local function paint(tex, c)
   tex:SetColorTexture(c[1], c[2], c[3], c[4] or 1)
 end
 
+-- Sizes a vertical scrollbar thumb to the visible fraction of its content, so it
+-- reads as a real position indicator instead of a fixed block that swamps a
+-- short box. Shared by every scrollbar the panel draws. Exposed so other files
+-- (the note window) keep the same proportions.
+local SCROLL_THUMB_MIN = 18
+function ns.sizeScrollThumb(thumb, viewH, contentH)
+  if not (thumb and viewH and contentH) or viewH <= 0 or contentH <= 0 then return end
+  local h = math.max(SCROLL_THUMB_MIN, math.min(viewH, viewH * (viewH / contentH)))
+  thumb:SetHeight(h)
+end
+
 -- SetHighlightTexture, not a texture on the HIGHLIGHT layer: only the former is
 -- shown on mouseover alone.
 local function hoverTint(b, alpha)
@@ -142,6 +153,32 @@ local function numberControl(parent, label, get, set, minv, maxv, tooltip)
   e:SetScript("OnEscapePressed", function(self) self:ClearFocus(); c.refresh() end)
   c.editbox = e
   c.refresh = function() e:SetText(tostring(get())) end
+  c.refresh()
+  return c
+end
+
+-- A short free-text entry on the shared row, committed on enter or focus loss.
+-- An empty value falls back to `default` so a required keyword is never blank.
+local function textControl(parent, label, get, set, default, tooltip)
+  local c = labelledRow(parent, label, tooltip)
+  local e = CreateFrame("EditBox", nil, c, "InputBoxTemplate")
+  e:SetSize(140, 22)
+  e:SetPoint("LEFT", c, "LEFT", CONTROL_X + 6, 0)
+  e:SetAutoFocus(false)
+  e:SetFontObject("ChatFontNormal")
+  e:SetTextInsets(4, 4, 0, 0)
+  local function commit(self)
+    local v = (self:GetText() or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if v == "" then v = default or "" end
+    set(v)
+    self:SetText(v)
+    self:ClearFocus()
+  end
+  e:SetScript("OnEnterPressed", commit)
+  e:SetScript("OnEditFocusLost", commit)
+  e:SetScript("OnEscapePressed", function(self) self:ClearFocus(); c.refresh() end)
+  c.editbox = e
+  c.refresh = function() e:SetText(tostring(get() or default or "")) end
   c.refresh()
   return c
 end
@@ -338,6 +375,7 @@ local function scrollBox(parent, w, h)
     if range > 1 then
       sbar:SetMinMaxValues(0, range)
       sbar:SetValue(math.min(scroll:GetVerticalScroll(), range))
+      ns.sizeScrollThumb(thumb, viewH, childH)
       sbar:Show()
     else
       scroll:SetVerticalScroll(0)
@@ -388,6 +426,19 @@ local function editbox(parent, w, multiline, height)
   -- Callers position the well, not the edit box inside it.
   e.container = box
   return e
+end
+
+-- Parks a multi-line box at its first line: SetText leaves the cursor at the end,
+-- which scrolls a long value to the bottom. Any box holding a lot of text is put
+-- back to the top after its text is set.
+local function multilineToTop(edit)
+  if not edit then return end
+  edit:SetCursorPosition(0)
+  local box = edit.container
+  if box then
+    if box.scroll then box.scroll:SetVerticalScroll(0) end
+    if box.update then box.update() end
+  end
 end
 
 local function place(widget, parent, x, y)
@@ -620,7 +671,8 @@ local function buildNoteEditor(page, y)
     end
   end
   ed.refresh()
-  return ed
+  -- Bottom edge of the editor: the note box sits at `y` and is 92 tall.
+  return ed, y - 92 - 8
 end
 
 -- ── Settings sub-page ────────────────────────────────────────────────────────
@@ -637,11 +689,49 @@ local function buildSettings()
 
   panel.tabs, panel.pages = {}, {}
 
+  -- An update reminder across the top, above the tabs, when a newer version is
+  -- likely out. Reserved at build time (its status is known by login); the rest
+  -- of the layout shifts down by its height only when it is shown.
+  local status = (type(ns.updateStatus) == "function") and ns.updateStatus() or nil
+  local BANNER_H = status and 30 or 0
+  if status then
+    local box = CreateFrame("Frame", nil, panel, "BackdropTemplate")
+    box:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -4)
+    box:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -12, -4)
+    box:SetHeight(24)
+    -- A calm, theme-matching alert: a warm dark backdrop with a soft gold rule,
+    -- not an alarming red. Gold text reads as a notice, not a warning.
+    if box.SetBackdrop then
+      box:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 },
+      })
+      box:SetBackdropColor(0.16, 0.13, 0.08, 0.94)
+      box:SetBackdropBorderColor(GOLD_RGB[1], GOLD_RGB[2], GOLD_RGB[3], 0.45)
+    else
+      local bg = box:CreateTexture(nil, "BACKGROUND")
+      bg:SetAllPoints()
+      bg:SetColorTexture(0.16, 0.13, 0.08, 0.94)
+    end
+    box.text = box:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    box.text:SetPoint("LEFT", box, "LEFT", 10, 0)
+    box.text:SetPoint("RIGHT", box, "RIGHT", -10, 0)
+    box.text:SetJustifyH("LEFT")
+    box.text:SetText(GOLD .. status.message .. ENDC)
+    panel.banner = box
+  end
+
   panel.desc = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   panel.desc:SetJustifyH("LEFT")
 
   local function select(group)
-    for g, page in pairs(panel.pages) do page:SetShown(g == group) end
+    for g, page in pairs(panel.pages) do
+      local shown = g == group
+      if page.scroll then page.scroll:SetShown(shown) end
+      page:SetShown(shown)
+      if shown and page.updateScroll then page.updateScroll() end
+    end
     for g, tab in pairs(panel.tabs) do tab.setActive(g == group) end
     local d = (ns.TAB_DESC or {})[group]
     panel.desc:SetText(d and (GREY .. d .. ENDC) or "")
@@ -657,7 +747,7 @@ local function buildSettings()
 
   -- The tab strip wraps to more rows when the next tab would run past the panel,
   -- so a growing set of features never pushes tabs off the right edge.
-  local rowX, rowY, rows = 16, STRIP_Y, 1
+  local rowX, rowY, rows = 16, STRIP_Y - BANNER_H, 1
   for _, g in ipairs(tabOrder) do
     local tab = tabButton(panel, g)
     local w = tab:GetWidth()
@@ -672,8 +762,9 @@ local function buildSettings()
     rowX = rowX + w + TAB_GAP
   end
 
-  -- Everything below the strip shifts down by however many rows it grew to.
-  local stripY = STRIP_Y - (rows - 1) * (TAB_H + TAB_GAP) - TAB_H
+  -- Everything below the strip shifts down by however many rows it grew to, plus
+  -- the update banner's height when one is shown.
+  local stripY = STRIP_Y - BANNER_H - (rows - 1) * (TAB_H + TAB_GAP) - TAB_H
   local strip = panel:CreateTexture(nil, "ARTWORK")
   strip:SetHeight(1)
   paint(strip, { 1, 1, 1, 0.25 })
@@ -684,16 +775,89 @@ local function buildSettings()
   panel.desc:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -24, stripY - 12)
   local contentY = stripY - 34
 
+  -- Each tab's content lives in a scroll viewport so a long page (Automation,
+  -- once the social options are on it) scrolls rather than spilling past the
+  -- settings frame. The slim gold scrollbar matches the Note editor's.
   local function newPage(g)
-    local page = CreateFrame("Frame", nil, panel)
-    page:SetPoint("TOPLEFT", panel, "TOPLEFT", 24, contentY)
-    page:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -16, 16)
-    page:Hide()
+    local scroll = CreateFrame("ScrollFrame", nil, panel)
+    scroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 24, contentY)
+    scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -22, 16)
+    scroll:EnableMouseWheel(true)
+    scroll:Hide()
+
+    local page = CreateFrame("Frame", nil, scroll)
+    page:SetPoint("TOPLEFT", scroll, "TOPLEFT", 0, 0)
+    page:SetSize(460, 1)
+    scroll:SetScrollChild(page)
+
+    local sbar = CreateFrame("Slider", nil, scroll)
+    sbar:SetWidth(5)
+    sbar:SetPoint("TOPLEFT", scroll, "TOPRIGHT", 4, 0)
+    sbar:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", 4, 0)
+    sbar:SetOrientation("VERTICAL")
+    sbar:SetValueStep(1)
+    sbar:SetObeyStepOnDrag(true)
+    sbar:SetMinMaxValues(0, 0)
+    local track = sbar:CreateTexture(nil, "BACKGROUND")
+    track:SetAllPoints()
+    track:SetColorTexture(1, 1, 1, 0.06)
+    local thumb = sbar:CreateTexture(nil, "OVERLAY")
+    thumb:SetColorTexture(GOLD_RGB[1], GOLD_RGB[2], GOLD_RGB[3], 0.55)
+    thumb:SetSize(5, 30)
+    sbar:SetThumbTexture(thumb)
+    sbar:SetScript("OnValueChanged", function(_, v) scroll:SetVerticalScroll(v) end)
+    sbar:Hide()
+
+    -- Match the content to the viewport width and show the bar only when the
+    -- content is taller than the view.
+    local function update()
+      local w = scroll:GetWidth() or 0
+      if w > 0 then page:SetWidth(w) end
+      local viewH = scroll:GetHeight() or 0
+      local range = math.max(0, (page.contentH or 0) - viewH)
+      if range > 1 then
+        sbar:SetMinMaxValues(0, range)
+        sbar:SetValue(math.min(scroll:GetVerticalScroll() or 0, range))
+        ns.sizeScrollThumb(thumb, viewH, page.contentH or 0)
+        sbar:Show()
+      else
+        scroll:SetVerticalScroll(0)
+        sbar:Hide()
+      end
+    end
+    page.updateScroll = update
+
+    scroll:SetScript("OnSizeChanged", update)
+    scroll:SetScript("OnShow", update)
+    scroll:SetScript("OnMouseWheel", function(self, delta)
+      local range = math.max(0, (page.contentH or 0) - (self:GetHeight() or 0))
+      if range <= 0 then return end
+      local v = math.min(range, math.max(0, (self:GetVerticalScroll() or 0) - delta * 30))
+      self:SetVerticalScroll(v)
+      sbar:SetValue(v)
+    end)
+
+    page.scroll = scroll
     page.checks = {}
     page.controls = {}
     page.sections = {}
+    page.sectionY = {}
     panel.pages[g] = page
     return page
+  end
+
+  -- Scrolls a page so a named section's heading sits at the top of the view, and
+  -- selects its tab first. Used by the edit-mode overlay's "Click to edit".
+  function panel.showSection(group, section)
+    select(group)
+    local page = panel.pages[group]
+    if not page or not page.scroll then return end
+    local y = page.sectionY and page.sectionY[section]
+    if not y then return end
+    local range = math.max(0, (page.contentH or 0) - (page.scroll:GetHeight() or 0))
+    local target = math.min(math.max(0, -y - 4), range)
+    page.scroll:SetVerticalScroll(target)
+    if page.updateScroll then page.updateScroll() end
   end
 
   for _, g in ipairs(order) do
@@ -703,6 +867,7 @@ local function buildSettings()
       local sec = o.section or g
       if sec ~= lastSection then
         if lastSection then yy = yy - SECTION_GAP end
+        page.sectionY[sec] = yy
         page.sections[#page.sections + 1] = heading(page, sec, 0, yy, 440)
         lastSection = sec
         yy = yy - 26
@@ -714,6 +879,8 @@ local function buildSettings()
         control = numberControl(page, o.label, get, set, o.min or 0, o.max or 100, o.tooltip)
       elseif o.type == "choice" then
         control = choiceControl(page, o.label, get, set, o.choices or {}, o.tooltip)
+      elseif o.type == "text" then
+        control = textControl(page, o.label, get, set, o.default, o.tooltip)
       else
         control = checkbox(page, o.label, get, set, o.tooltip)
         page.checks[o.key] = control
@@ -723,6 +890,7 @@ local function buildSettings()
       page.controls[o.key] = control
     end
     page.nextY = yy
+    page.bottomY = yy
   end
 
   -- Test-frame buttons live on the General tab (order[1]), alongside the other
@@ -740,16 +908,29 @@ local function buildSettings()
       firstPage.buttons[b.label] = btn
       yy = yy - 26
     end
+    firstPage.bottomY = yy
   end
 
   -- The Note tab carries the prepare-ahead editor, below its options.
   local notePage = panel.pages["Note"]
   if notePage then
-    notePage.noteEditor = buildNoteEditor(notePage, (notePage.nextY or 0) - SECTION_GAP)
+    local ed, noteBottom = buildNoteEditor(notePage, (notePage.nextY or 0) - SECTION_GAP)
+    notePage.noteEditor = ed
+    notePage.bottomY = noteBottom
   end
 
-  buildAbout(newPage(ABOUT))
+  local aboutPage = newPage(ABOUT)
+  buildAbout(aboutPage)
+  aboutPage.bottomY = -300
   order[#order + 1] = ABOUT
+
+  -- Size each scroll child to its content now that every page is laid out, so
+  -- the scrollbar knows the range before the panel is first shown.
+  for _, page in pairs(panel.pages) do
+    page.contentH = math.max(1, -(page.bottomY or 0) + 12)
+    page:SetHeight(page.contentH)
+    if page.updateScroll then page.updateScroll() end
+  end
 
   panel.refresh = function()
     for _, page in pairs(panel.pages) do
@@ -833,10 +1014,92 @@ local function buildProfiles()
     if name and name ~= "" then ns.createProfile(name); newBox:SetText("") end
   end):SetPoint("TOPLEFT", 266, -128)
 
+  -- A short modal for when the main can't be inferred on deletion (more than one
+  -- other profile to choose from), so the user picks one first.
+  local function mustSetMainAlert()
+    if type(StaticPopupDialogs) == "table" and type(StaticPopup_Show) == "function" then
+      StaticPopupDialogs["MYTHICPLUSTIMER_SET_MAIN_FIRST"] =
+        StaticPopupDialogs["MYTHICPLUSTIMER_SET_MAIN_FIRST"] or {
+          text = "Set another profile as main first, then delete this one.",
+          button1 = OKAY or "Okay",
+          timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+        }
+      StaticPopup_Show("MYTHICPLUSTIMER_SET_MAIN_FIRST")
+    else
+      ns.print("set another profile as main first, then delete this one.")
+    end
+  end
+
+  -- Deletes the active profile. Any profile (Default included) can go as long as
+  -- another remains. Deleting the account main needs a replacement: with exactly
+  -- one other profile that one is promoted automatically; with several, the user
+  -- is asked to choose a main first.
+  local function deleteActive()
+    local active = ns.activeProfile()
+    local names = ns.profileNames()
+    if #names <= 1 then return end
+    local others = {}
+    for _, n in ipairs(names) do if n ~= active then others[#others + 1] = n end end
+    if active == ns.mainProfile() then
+      if #others == 1 then
+        ns.setMainProfile(others[1])
+      else
+        mustSetMainAlert()
+        return
+      end
+    end
+    -- Deleting the active profile re-resolves to the main in one step (a valid
+    -- main is guaranteed above), so this is a single refresh. Switching first
+    -- with loadProfile would fire a second full panel refresh, the source of a
+    -- visible hitch on delete.
+    ns.deleteProfile(active)
+  end
+
   button(panel, "Reset", 110, function() ns.resetProfile() end):SetPoint("TOPLEFT", 266, -186)
-  button(panel, "Set as main", 116, function() ns.setMainProfile(ns.activeProfile()) end):SetPoint("TOPLEFT", 382, -186)
-  panel.deleteBtn = button(panel, "Delete", 110, function() ns.deleteProfile(ns.activeProfile()) end)
+  -- setMainProfile only writes the value, so redraw the list at once for the
+  -- "main" tag to move without waiting on a later refresh.
+  button(panel, "Set as main", 116, function()
+    ns.setMainProfile(ns.activeProfile())
+    panel.refresh()
+  end):SetPoint("TOPLEFT", 382, -186)
+  panel.deleteBtn = button(panel, "Delete", 110, deleteActive)
   panel.deleteBtn:SetPoint("TOPLEFT", 266, -212)
+
+  -- Copy another profile's settings into this one, so a new profile can start
+  -- from an existing look rather than the defaults (like Ace3's "Copy From").
+  local copyLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  copyLabel:SetPoint("TOPLEFT", 266, -242)
+  copyLabel:SetText(GREY .. "Copy from" .. ENDC)
+  panel.copyDD = dropdownWidget(panel, 150)
+  panel.copyDD:SetPoint("TOPLEFT", 336, -238)
+  panel.copyDD.placeholder = "another profile"
+
+  -- An inline confirmation instead of a popup: a green line that shows what was
+  -- copied and fades out on its own.
+  panel.copyMsg = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  panel.copyMsg:SetPoint("TOPLEFT", 266, -262)
+  panel.copyMsg:SetAlpha(0)
+  local ag = panel.copyMsg.CreateAnimationGroup and panel.copyMsg:CreateAnimationGroup()
+  if ag and ag.CreateAnimation then
+    local fade = ag:CreateAnimation("Alpha")
+    fade:SetFromAlpha(1); fade:SetToAlpha(0)
+    fade:SetDuration(1.4); fade:SetStartDelay(1.4)
+    ag:SetScript("OnFinished", function() panel.copyMsg:SetAlpha(0) end)
+    panel.copyFade = ag
+  end
+  local function showCopied(name)
+    panel.copyMsg:SetText(ns.GREEN .. "Copied settings from " .. name .. ENDC)
+    panel.copyMsg:SetAlpha(1)
+    if panel.copyFade then panel.copyFade:Stop(); panel.copyFade:Play() end
+  end
+
+  panel.copyDD.onSelect = function(v)
+    if v and v ~= "" then
+      ns.copyProfileFrom(v)  -- refreshes every panel (resets this dropdown)
+      showCopied(v)
+    end
+    panel.copyDD:SetValue(nil)
+  end
 
   local exportLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   exportLabel:SetPoint("TOPLEFT", 16, -286)
@@ -854,9 +1117,17 @@ local function buildProfiles()
 
   panel.refresh = function()
     panel.current:SetText(WHITE .. "Active: " .. ENDC .. GOLD .. ns.activeProfile() .. ENDC)
-    -- Never let the default profile be deleted out from under a fresh install.
-    panel.deleteBtn:SetEnabled(ns.activeProfile() ~= "Default")
+    -- Any profile can be deleted, so long as one remains to fall back to.
+    panel.deleteBtn:SetEnabled(#ns.profileNames() > 1)
     panel.exportBox:SetText(ns.exportProfile() or "")
+    multilineToTop(panel.exportBox)
+    -- Copy-from lists every profile but the active one (its own source).
+    local active, others = ns.activeProfile(), {}
+    for _, n in ipairs(ns.profileNames()) do
+      if n ~= active then others[#others + 1] = { value = n, label = n } end
+    end
+    panel.copyDD:SetChoices(others)
+    panel.copyDD:SetValue(nil)
     rebuildList()
   end
   panel.refresh()
@@ -875,6 +1146,12 @@ function ns.buildPanels()
   local settingsSub = buildSettings()
   local profiles = buildProfiles()
   ns.panels = { settings = settings, settingsSub = settingsSub, profiles = profiles }
+  -- OpenToCategory shows the main `settings` panel, so the edit-mode overlay's
+  -- jump drives that one. Deferred a frame so the panel has laid out (and knows
+  -- its scroll height) before we scroll it.
+  ns.showSettingsSection = function(group, section)
+    C_Timer.After(0, function() pcall(settings.showSection, group, section) end)
+  end
   -- A profile switch changes every value on screen, so redraw all three (and
   -- re-tick the overlay through its own hook).
   local overlayHook = ns.onProfileChanged

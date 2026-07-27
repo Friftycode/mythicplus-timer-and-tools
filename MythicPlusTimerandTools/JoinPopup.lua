@@ -366,7 +366,8 @@ end
 -- matches it.
 ns.previewFrame("join popup",
   function() renderJoinFrame("Preview", nil, nil) end,
-  function() if jpFrame then jpFrame:Hide() end end)
+  function() if jpFrame then jpFrame:Hide() end end,
+  function() return jpFrame end, { group = "Alerts", section = "Group finder" })
 
 local joinEvents = CreateFrame("Frame")
 for _, ev in ipairs({ "LFG_LIST_JOINED_GROUP", "GROUP_LEFT", "GROUP_ROSTER_UPDATE",

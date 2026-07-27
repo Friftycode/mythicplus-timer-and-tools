@@ -183,4 +183,4 @@ end, function()
   blPreviewing = false
   blHideAt = nil
   if blFrame then blFrame:Hide() end
-end)
+end, function() return blFrame end, { group = "Alerts", section = "Group chat" })
