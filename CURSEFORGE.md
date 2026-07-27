@@ -30,7 +30,7 @@ A Mythic+ timer, plus the small stuff that usually means extra work or a second 
 - **Quest givers:** Automatically accepts and turns in quests, everywhere or only in dungeons.
 - **Chat:** Makes links click to copy, and adds a Copy button to every chat tab.
 - **Minimap button:** Opens the options and toggles Let me focus. Drag it to move it, or hide it completely.
-- **Test mode:** Shows all movable frames at once, each with example content and a light-blue overlay like Blizzard's Edit Mode. Drag a frame to move it, resize it from its grip, or click it to jump straight to its settings. Escape closes it.
+- **Test mode:** Shows all movable frames at once, each with example content and a light-blue overlay. Drag a frame to move it, resize it from its grip, or click it to jump straight to its settings. Escape closes it.
 
 ### **Commands**
 
