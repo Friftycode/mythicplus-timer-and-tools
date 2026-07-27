@@ -201,14 +201,20 @@ local function ksApply(entry)
   if activityID and type(LFGListEntryCreation_Select) == "function" then
     pcall(LFGListEntryCreation_Select, frame, frame.selectedFilters, categoryID, groupID, activityID)
   end
-  -- The title box is `Name`; only overwrite an empty one so we never clobber a
-  -- title the player has already typed.
-  local nameBox = frame.Name
-  if type(nameBox) == "table" and type(nameBox.SetText) == "function" then
-    local cur = type(nameBox.GetText) == "function" and nameBox:GetText() or ""
-    if type(cur) ~= "string" or cur == "" then
+  -- Write the "+level" title for the chosen key. Selecting the activity above
+  -- auto-fills the title box with the activity's default name, so an
+  -- "only if empty" write never fired; picking a key is an explicit request for
+  -- that title, so set it outright. Do it again a frame later, since the panel's
+  -- own post-select refresh can re-stamp the default title after we return.
+  local function setTitle()
+    local nameBox = frame.Name
+    if type(nameBox) == "table" and type(nameBox.SetText) == "function" then
       nameBox:SetText("+" .. entry.level)
     end
+  end
+  setTitle()
+  if C_Timer and type(C_Timer.After) == "function" then
+    C_Timer.After(0, function() pcall(setTitle) end)
   end
 end
 ns.keyShareApply = ksApply

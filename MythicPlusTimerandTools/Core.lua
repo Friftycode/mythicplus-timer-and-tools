@@ -130,7 +130,7 @@ local DEFAULTS = {
   -- surprise people). Guild members count as friends by default; communities do
   -- not, since a large community is a wider net than most people expect.
   acceptpartyfriends = false,     -- auto accept a party invite from a friend
-  confirmqueuerole = false,       -- auto confirm the role check when a friend queues you
+  confirmqueuerole = "off",       -- role check from a friend: "off" | "last" | "tank" | "healer" | "dps"
   invitefromwhisper = false,      -- invite someone who whispers the keyword below
   invitekeyword = "inv",          -- the whisper that triggers an invite
   invitefriendsonly = true,       -- only invite friends who whisper the keyword
@@ -163,7 +163,7 @@ ns.OPTIONS = {
   { key = "chatcopy", group = "Chat", section = "Copying", label = "Copy button on the chat window", tooltip = "Add a Copy button to each chat window. It opens that window's text in a box you can select and copy." },
   { key = "joinpopup", group = "Alerts", section = "Group finder", label = "Show which key you joined", tooltip = "When you join a group through the Group Finder, show the dungeon you were accepted into, its party, and a teleport button when you have one." },
   { key = "bloodlust", group = "Alerts", section = "Group chat", label = "Alert when bloodlust is called", tooltip = "Show a short on-screen alert when someone in your group types bl, hero, lust, drums, or the like." },
-  { key = "buffreminder", group = "Alerts", section = "Buff reminder", label = "Remind about missing party buffs", tooltip = "Flag a class party buff that has been missing from a group member for a while. Only classes actually in the group are checked." },
+  { key = "buffreminder", group = "Alerts", section = "Buff reminder", label = "Remind about missing party buffs", tooltip = "Flag a class party buff that has been missing from a group member for a while. Only classes actually in the group are checked. Inside a Mythic+ dungeon nothing is posted until the key is under way, so the group is not nagged while still buffing before the run." },
   { key = "buffthreshold", type = "number", min = 15, max = 60, group = "Alerts", section = "Buff reminder", label = "Missing for at least (seconds)", tooltip = "How long a buff must be missing from a member before it is flagged. Between 15 and 60 seconds." },
   { key = "buffdelivery", type = "choice", choices = { { value = "chat", label = "Party chat" }, { value = "popup", label = "Popup" }, { value = "both", label = "Both" } }, group = "Alerts", section = "Buff reminder", label = "Show the reminder as", tooltip = "A message in party chat, an on-screen popup, or both. Party-chat messages are coordinated between group members running this addon, so only one is posted and they share the wait below." },
   { key = "buffcooldown", group = "Alerts", section = "Buff reminder", label = "Limit how often it reminds", tooltip = "Wait between reminders instead of flagging every missing buff. Turn off to be reminded whenever a buff is missing. The wait is shared with other group members running this addon." },
@@ -189,7 +189,7 @@ ns.OPTIONS = {
   { key = "keylink", group = "Chat", section = "Keystone", label = "Reply to \"!keys\" with your key", tooltip = "When someone types !keys in party, instance, or guild chat, post a link to the keystone you are carrying. Works for anyone asking, whether or not they run this addon." },
 
   { key = "acceptpartyfriends", group = "Automation", section = "Accept from friends", label = "Accept party invites from friends", tooltip = "Automatically accept a party invite from a friend, unless you are queued for a dungeon or raid. Guild and community members can count as friends below." },
-  { key = "confirmqueuerole", group = "Automation", section = "Accept from friends", label = "Confirm role when a friend queues", tooltip = "Automatically confirm the ready/role check when the group leader who started it is a friend. Guild and community members can count as friends below." },
+  { key = "confirmqueuerole", type = "choice", choices = { { value = "off", label = "Off" }, { value = "last", label = "Last used role" }, { value = "tank", label = "Tank" }, { value = "healer", label = "Healer" }, { value = "dps", label = "Damage" } }, group = "Automation", section = "Accept from friends", label = "Confirm role when a friend queues", tooltip = "Automatically confirm the ready/role check when the group leader who started it is a friend. \"Last used role\" confirms with whatever roles you last queued as; pick Tank, Healer, or Damage to always confirm as that role instead. A role your current spec cannot fill is ignored and the last used role is kept, so a healer spec asked to confirm as Tank still confirms as healer. Guild and community members can count as friends below." },
   { key = "invitefromwhisper", group = "Automation", section = "Invite from whispers", label = "Invite when whispered a keyword", tooltip = "Invite anyone who whispers you the keyword below to your group, as long as you are the leader (or not in a group) and not queued." },
   { key = "invitekeyword", type = "text", default = "inv", group = "Automation", section = "Invite from whispers", label = "Keyword", tooltip = "The whisper that triggers an invite. Case is ignored. Defaults to \"inv\"." },
   { key = "invitefriendsonly", group = "Automation", section = "Invite from whispers", label = "Only invite friends", tooltip = "Only send an invite when the person who whispered the keyword is a friend. Turn off to invite anyone who whispers it. Battle.net whispers always invite the friend who sent them." },
@@ -281,7 +281,12 @@ local function cleanProfile(src)
     autoquestmode = { always = true, never = true, dungeon = true },
     groupplaystyle = { off = true, ["1"] = true, ["2"] = true, ["3"] = true, ["4"] = true },
     defaultdifficulty = { off = true, normal = true, heroic = true, mythic = true, mythicplus = true },
+    confirmqueuerole = { off = true, last = true, tank = true, healer = true, dps = true },
   }
+  -- confirmqueuerole was once a checkbox: carry the old boolean over to the
+  -- matching choice so an existing setting is not silently reset.
+  if clean.confirmqueuerole == true then clean.confirmqueuerole = "last"
+  elseif clean.confirmqueuerole == false then clean.confirmqueuerole = "off" end
   for key, allowed in pairs(CHOICES) do
     if clean[key] ~= nil and not allowed[clean[key]] then clean[key] = nil end
   end

@@ -34,9 +34,11 @@ A retail World of Warcraft addon with two pieces:
   move it around the minimap. Bring it back from **General** in the Settings.
 - **Missing buff reminder**: flags a class party buff that has gone missing from
   a group member, but only for classes actually in the group (no nagging for
-  Skyfury with no Shaman around). The wait before it flags, whether it shows in
-  chat or as a popup, an anti-spam cooldown, and which class buffs to track are
-  all configurable.
+  Skyfury with no Shaman around). Inside a Mythic+ dungeon it stays quiet until
+  the key is actually under way, so nothing is posted while the group is still
+  buffing before the run. The wait before it flags, whether it shows in chat or
+  as a popup, an anti-spam cooldown, and which class buffs to track are all
+  configurable.
 - **Note**: a note window tied to the dungeon you're standing in, with one
   general dungeon note plus a note per boss (pulled from the Encounter Journal).
   The dungeon note is editable any time; a boss note is editable only outside its
@@ -59,7 +61,8 @@ A retail World of Warcraft addon with two pieces:
 - **Party, invites, and duels**: opt-in handling of what other players send you,
   ported from Leatrix Plus and living on the **Automation** tab. Auto-accept a
   party invite from a friend, auto-confirm the role check when a friend queues
-  you, invite anyone who whispers a keyword (friends-only optional), and block
+  you (with your last used role, or a fixed Tank/Healer/Damage role your spec
+  can fill), invite anyone who whispers a keyword (friends-only optional), and block
   party invites, "requested to join" confirmations, or duels from anyone who
   isn't a friend. Guild members count as friends by default; communities are an
   opt-in. Every behaviour is off until you turn it on.
@@ -122,7 +125,7 @@ out under horizontal tabs, and **Profiles**.
 | Automation | Keep new listings on Mythic+ | on | Hold a group listing on the Mythic+ keystone as you switch dungeons; a manual pick is respected |
 | Automation | Default playstyle | Competitive | Preselect the required "Select Playstyle" on a new listing (Off / Learning / Relaxed / Competitive / Carry offered) |
 | Automation | Accept party invites from friends | off | Auto-accept a party invite from a friend (unless you're queued) |
-| Automation | Confirm role when a friend queues | off | Auto-confirm the role check when the leader who started it is a friend |
+| Automation | Confirm role when a friend queues | off | Auto-confirm the role check when the leader who started it is a friend; confirm with your last used role or a fixed Tank/Healer/Damage role (a role your spec cannot fill is ignored) |
 | Automation | Invite when whispered a keyword | off | Invite whoever whispers your keyword (default "inv"); a "Keyword" box and an "Only invite friends" toggle sit beside it |
 | Automation | Block party invites | off | Decline party invites from anyone who isn't a friend |
 | Automation | Block requested invites | off | Decline "requested to join your group" confirmations from non-friends |
@@ -267,9 +270,22 @@ Kept here until the next tagged release picks it up.
 
 ### Unreleased
 
+- **Choose the confirmed role** (Automation): "Confirm role when a friend queues"
+  is now a choice, not just on/off. Confirm with your last used role, or pin it
+  to Tank, Healer, or Damage. A role your current spec cannot fill is ignored, so
+  the pick never queues you as something you can't play. An existing on/off
+  setting carries over (on becomes "Last used role").
+- **Buff reminder holds until the key starts**: inside a Mythic+ dungeon the
+  missing-buff reminder no longer posts (chat or popup) until the run is actually
+  under way, so the group is not nagged while it is still buffing before the key.
+  Outside a dungeon (raids, an open-world group) it behaves as before.
+- **Party key title fixed**: picking a party key from the create-a-group dropdown
+  now reliably writes the "+level" title. Selecting the dungeon activity had been
+  auto-filling the title box first, so the "+level" write was skipped.
 - **Party, invites, and duels** (Automation): opt-in social handling ported from
   Leatrix Plus, all off by default. Accept a party invite from a friend, confirm
-  the role check when a friend queues you, invite anyone who whispers a keyword
+  the role check when a friend queues you (as your last used role or a fixed
+  Tank/Healer/Damage role your spec can fill), invite anyone who whispers a keyword
   (default "inv", with a friends-only toggle and Battle.net whispers inviting the
   sender), and block party invites, "requested to join" confirmations, or duels
   from non-friends. A shared friend gate decides who counts: character and

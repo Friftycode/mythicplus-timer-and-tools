@@ -16,9 +16,9 @@ A Mythic+ timer, plus the small stuff that usually means extra work or a second 
 - **Party keys:** Anyone in the group running the addon shares their key, so the Premade Groups Create screen gets a dropdown of everyone's keys. Pick one and it fills in the dungeon and a "+level" title.
 - **!keys:** Type "!keys" to link the keystone you're carrying. Anyone in the group can use it.
 - **Group Finder invites:** When you get invited to a group it shows the dungeon, leader, group note, and a teleport button if you've unlocked it.
-- **Missing buff reminder:** Warns you when someone is missing their class buff, only for classes actually in the group. Choose party chat, a popup, or both, and configure which buffs to check and how often.
+- **Missing buff reminder:** Warns you when someone is missing their class buff, only for classes actually in the group. Inside a Mythic+ dungeon it waits until the key starts, so nobody is nagged while the group is still buffing before the run. Choose party chat, a popup, or both, and configure which buffs to check and how often.
 - **Bloodlust alert:** Shows a popup when someone types bl, hero, lust, drums, etc.
-- **Friend invites:** Auto-accepts a party invite from a friend, and confirms the role check when a friend queues you.
+- **Friend invites:** Auto-accepts a party invite from a friend, and confirms the role check when a friend queues you. Confirm as your last used role, or pin it to Tank, Healer, or Damage (a role your spec cannot fill is skipped).
 - **Invite on whisper:** Invites anyone who whispers your keyword (default "inv"). Friends only if you want.
 - **Block invites and duels:** Turns away party invites, join requests, and duels from anyone who isn't a friend. Guild members count as friends; communities are optional.
 

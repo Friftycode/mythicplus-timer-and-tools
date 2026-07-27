@@ -53,6 +53,26 @@ local function brPresentClasses(units)
   return present
 end
 
+-- Inside a Mythic+ dungeon, hold every reminder until the key is actually under
+-- way, so nothing is posted while the group is still buffing before the run
+-- starts. Elsewhere (raids, an open-world group) there is nothing to wait for.
+local function brInPartyDungeon()
+  if type(IsInInstance) ~= "function" then return false end
+  local ok, inside, itype = pcall(IsInInstance)
+  return ok and inside and itype == "party" and true or false
+end
+
+local function brChallengeActive()
+  if not (C_ChallengeMode and type(C_ChallengeMode.IsChallengeModeActive) == "function") then return false end
+  local ok, active = pcall(C_ChallengeMode.IsChallengeModeActive)
+  return ok and active and true or false
+end
+
+local function brDeliveryAllowed()
+  if brInPartyDungeon() and not brChallengeActive() then return false end
+  return true
+end
+
 -- Whether a unit currently has the given buff. On any client that can't answer
 -- (no aura API, an error, a secret aura) we assume it's present, so an inability
 -- to read is never reported as a missing buff.
@@ -286,6 +306,11 @@ local function brScan()
   end
 
   if #pending == 0 then return end
+
+  -- Hold everything until a Mythic+ run has started. missingSince is left intact
+  -- and nothing is marked alerted, so the moment the key goes live any buff still
+  -- missing past the threshold is announced on the next scan.
+  if not brDeliveryAllowed() then return end
 
   local delivery = cfg("buffdelivery")
   if delivery ~= "chat" and delivery ~= "popup" and delivery ~= "both" then delivery = "chat" end

@@ -214,12 +214,59 @@ ns.onOptionChanged("blockduels", updateDuels)
 -- for you. Hooks the accept button's OnShow so it fires whenever the popup
 -- appears, matching the source addon.
 
+-- The role-check popup's three role buttons, and the config value that maps to
+-- each. A button is only "available" when its check box is enabled, which the
+-- client does per the current spec, so a role the spec cannot fill is never set.
+local ROLE_BUTTON = {
+  tank   = "LFDRoleCheckPopupRoleButtonTank",
+  healer = "LFDRoleCheckPopupRoleButtonHealer",
+  dps    = "LFDRoleCheckPopupRoleButtonDPS",
+}
+
+local function roleCheckBox(role)
+  local rb = _G[ROLE_BUTTON[role] or ""]
+  local cb = rb and rb.checkButton
+  return (type(cb) == "table" and type(cb.GetChecked) == "function") and cb or nil
+end
+
+local function roleAvailable(role)
+  local cb = roleCheckBox(role)
+  if not (cb and type(cb.IsEnabled) == "function") then return false end
+  local ok, enabled = pcall(cb.IsEnabled, cb)
+  return ok and enabled and true or false
+end
+
+-- Toggle a role's check box to `want` by clicking it, so Blizzard's own OnClick
+-- runs (it records the roles and keeps the Accept button's enabled state right).
+local function setRoleChecked(role, want)
+  local cb = roleCheckBox(role)
+  if not (cb and type(cb.Click) == "function") then return end
+  local ok, checked = pcall(cb.GetChecked, cb)
+  if not ok then return end
+  if (checked and true or false) ~= want then pcall(cb.Click, cb) end
+end
+
+-- Force the popup to the single chosen role when the current spec can fill it.
+-- Returns true once it has set the roles; false to leave the popup exactly as
+-- the client left it (the last used role), which is also the fallback when the
+-- chosen role is not one this spec offers.
+local function applyPreferredRole(mode)
+  if not ROLE_BUTTON[mode] then return false end
+  if not roleAvailable(mode) then return false end
+  setRoleChecked(mode, true)                 -- ensure the chosen role first
+  for role in pairs(ROLE_BUTTON) do
+    if role ~= mode then setRoleChecked(role, false) end
+  end
+  return true
+end
+
 local roleHooked = false
 local function installRoleConfirm()
   if roleHooked or type(LFDRoleCheckPopupAcceptButton) ~= "table" then return end
   roleHooked = true
   LFDRoleCheckPopupAcceptButton:HookScript("OnShow", function(self)
-    if not cfg("confirmqueuerole") then return end
+    local mode = cfg("confirmqueuerole")
+    if mode == "off" or not mode then return end
     local leader, leaderGUID
     for i = 1, (GetNumSubgroupMembers() or 0) do
       local unit = "party" .. i
@@ -229,6 +276,9 @@ local function installRoleConfirm()
       end
     end
     if leader and ns.friendCheck(leader, leaderGUID) then
+      -- "last" leaves the popup as the client pre-filled it; a specific role is
+      -- applied only when the spec can fill it. Either way, then confirm.
+      pcall(applyPreferredRole, mode)
       self:Click()
     end
   end)

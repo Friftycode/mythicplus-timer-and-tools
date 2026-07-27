@@ -32,7 +32,7 @@ local keys, boxCount = {}, 0
 for _, page in pairs(settingsPages) do
   for key in pairs(page.checks) do keys[key] = true; boxCount = boxCount + 1 end
 end
-ok(boxCount == 42, "forty-two checkboxes drawn, got " .. boxCount)
+ok(boxCount == 41, "forty-one checkboxes drawn, got " .. boxCount)
 ok(keys.mythicplustimer and keys.autonameplates and keys.letmefocus and keys.guildkeys
   and keys.autoslotkey and keys.joinpopup and keys.seasontp and keys.chatlinks
   and keys.chatcopy and keys.bloodlust and keys.minimapbutton,
@@ -1596,10 +1596,12 @@ ns.keyShareApply(mine)
 ok(Mock.lfgSelected and Mock.lfgSelected.activity == 2003, "the chosen key selects that dungeon's activity")
 ok(LFGListEntryCreation.Name.text == "+12", "the chosen key fills the title with '+level'")
 
--- A title the player already typed is never overwritten.
+-- Picking a key is an explicit request for its "+level" title, so it is written
+-- even over a title already in the box (selecting the activity auto-fills that
+-- box, so "only if empty" would never have fired for a real pick).
 LFGListEntryCreation.Name.text = "chill run"
 ns.keyShareApply(mine)
-ok(LFGListEntryCreation.Name.text == "chill run", "an existing title is left alone")
+ok(LFGListEntryCreation.Name.text == "+12", "picking a key writes the '+level' title over any existing one")
 
 -- A REQ from a peer prompts us to re-broadcast.
 Mock.sentAddon = {}
