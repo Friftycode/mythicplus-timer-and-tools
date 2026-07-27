@@ -452,6 +452,17 @@ local function ensureMPlusFrame()
   f.timeBar.bg = f.timeBar:CreateTexture(nil, "BACKGROUND")
   f.timeBar.bg:SetAllPoints()
   f.timeBar.bg:SetColorTexture(0, 0, 0, 0.5)
+  -- Thin white ticks over the fill marking the +3 then +2 upgrade windows. The
+  -- bar shows time REMAINING, so a threshold at X% of the timer elapsed sits at
+  -- (1 - X) of the bar's width from the left. Positioned in mpRender.
+  f.timeBar.ticks = {}
+  for i = 1, 2 do
+    local t = f.timeBar:CreateTexture(nil, "OVERLAY")
+    t:SetColorTexture(1, 1, 1, 0.85)
+    t:SetWidth(1)
+    t:Hide()
+    f.timeBar.ticks[i] = t
+  end
 
   f.timeZone = mpFocusZone(f, "focushidetime")
   f.deathZone = mpFocusZone(f, "focushidedeaths")
@@ -468,6 +479,7 @@ function mpRender()
   local f = ensureMPlusFrame()
   for _, fs in ipairs(f.cells) do fs:Hide() end
   for _, tx in ipairs(f.rules) do tx:Hide() end
+  for _, tk in ipairs(f.timeBar.ticks or {}) do tk:Hide() end
   local used, rulesUsed, y = 0, 0, 10
   local full = MP_W - MP_PAD * 2
   local function cell(text, x, width, justify, font)
@@ -600,6 +612,19 @@ function mpRender()
     f.timeBar:SetValue(frac)
     f.timeBar:SetStatusBarColor(remaining > 0 and 0.2 or 0.7, remaining > 0 and 0.7 or 0.2, 0.2)
     f.timeBar:Show()
+    if cfg("showbarticks") then
+      -- +3 first, then +2: at (1 - upgrade fraction) of the bar from the left.
+      local tickFractions = { 1 - MP_UPGRADE3_FRACTION, 1 - MP_UPGRADE2_FRACTION }
+      for i, tf in ipairs(tickFractions) do
+        local tk = f.timeBar.ticks[i]
+        if tk then
+          tk:ClearAllPoints()
+          tk:SetPoint("TOP", f.timeBar, "TOPLEFT", tf * full, 0)
+          tk:SetPoint("BOTTOM", f.timeBar, "BOTTOMLEFT", tf * full, 0)
+          tk:Show()
+        end
+      end
+    end
     y = y + 12
 
     if mp.timeLimit and mp.timeLimit > 0 then

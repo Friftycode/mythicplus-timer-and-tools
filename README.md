@@ -32,6 +32,24 @@ A retail World of Warcraft addon with two pieces:
 - **Minimap button**: a small button on the minimap. Click it for a menu that
   opens Settings, toggles Let me focus, or hides the button itself; drag it to
   move it around the minimap. Bring it back from **General** in the Settings.
+- **Missing buff reminder**: flags a class party buff that has gone missing from
+  a group member, but only for classes actually in the group (no nagging for
+  Skyfury with no Shaman around). The wait before it flags, whether it shows in
+  chat or as a popup, an anti-spam cooldown, and which class buffs to track are
+  all configurable.
+- **Note**: a note window tied to the dungeon you're standing in, with one
+  general dungeon note plus a note per boss (pulled from the Encounter Journal).
+  The dungeon note is editable any time; a boss note is editable only outside its
+  fight, so it stays a fixed reference while the boss is up. Notes can also be
+  **prepared ahead of time** from the Note settings tab — pick any dungeon and
+  boss and write its note before you set foot inside. Each dungeon keeps its own
+  notes, account-wide, surviving a reload or a wipe. Choose whether the window is
+  always up, appears only once a key starts, or stays hidden for the whole run.
+- **Automation**: opt-in conveniences that react to the game's own events — auto
+  repair (guild funds first, then your gold), auto sell grey junk, auto accept
+  and turn in quests (everywhere or in dungeons only), a warning when a dungeon
+  isn't set to Mythic, and keeping a new group listing on Mythic as you switch
+  dungeons in the group finder.
 - **Test frames**: every movable frame only appears at its own moment, which is
   the worst possible time to be arranging your screen. One button in the
   Settings panel (or `/mpt frames`) puts them all up at once so you can drag
@@ -58,14 +76,24 @@ out under horizontal tabs, and **Profiles**.
 | Run overlay | M+ run timer overlay | on | Show the overlay during an active key |
 | Run overlay | Enable enemy nameplates in keys | on | Turn enemy nameplates on at key start, restore your setting when it ends |
 | Run overlay | Let me focus | off | Click the clock or the deaths on the overlay to hide them |
-| Mythic+ window | Guild keys this week | on | Show the guild panel in the Mythic+ Dungeons window |
-| Mythic+ window | Auto-slot your keystone | on | Put your keystone in the Font of Power when you open it |
-| Mythic+ window | Teleport from Season Best icons | on | Click a dungeon in the Mythic+ window to travel there |
+| Mythic+ Window | Guild keys this week | on | Show the guild panel in the Mythic+ Dungeons window |
+| Mythic+ Window | Auto-slot your keystone | on | Put your keystone in the Font of Power when you open it |
+| Mythic+ Window | Teleport from Season Best icons | on | Click a dungeon in the Mythic+ window to travel there |
 | Chat | Clickable links in chat | on | Turn web addresses in chat into a link you can click to copy |
 | Chat | Copy button on the chat window | on | Add a Copy button that opens the window's text in a selectable box |
 | Alerts | Show which key you joined | on | Popup naming the dungeon (and the party's item level and M+ score) when a group accepts you |
 | Alerts | Alert when bloodlust is called | on | On-screen alert when someone in the group calls it in chat |
+| Alerts | Remind about missing party buffs | on | Flag a class buff missing from a member (only for classes in the group); delivery, wait, cooldown, and per-class tracking are configurable |
 | Display | Show affixes / enemy forces / bosses / deaths | on | Drop any of these blocks from the overlay |
+| Display | Show +2/+3 tick marks | on | Thin white ticks on the time bar at the upgrade windows |
+| Note | Show the note window | on | A per-dungeon note window (dungeon note + a note per boss); choose always / until key starts / hidden during the run. The tab also hosts a prepare-ahead editor |
+| Note | Follow the fight | on | Auto-open a boss's tab as you near or pull it, and return to the Dungeon tab afterwards |
+| Automation | Auto repair | on | Repair at a merchant, guild funds first when allowed, then your gold |
+| Automation | Auto sell junk | off | Sell grey (junk) items at a merchant |
+| Automation | Auto accept and turn in quests | in dungeons | Accept and hand in quests automatically; multi-choice rewards are left to you |
+| Automation | Warn if not set to Mythic | off | Warn on entering a dungeon that isn't Mythic difficulty |
+| Automation | Keep new listings on Mythic+ | on | Hold a group listing on the Mythic+ keystone as you switch dungeons; a manual pick is respected |
+| Automation | Default playstyle | Competitive | Preselect the required "Select Playstyle" on a new listing (Off / Learning / Relaxed / Competitive / Carry offered) |
 | General | Show the minimap button | on | A minimap button whose menu opens Settings, toggles Let me focus, or hides itself |
 
 **Profiles** keeps more than one set of settings and remembers which each
@@ -185,6 +213,54 @@ One file per feature. The `.toc` is the load order and the dependency order:
 | `.pkgmeta` | Tells CurseForge's packager which folder is the addon |
 | `.github/workflows/test.yml` | CI: runs `npm test` on every push and pull request |
 | `.github/workflows/release.yml` | Monthly job that keeps the interface current and tags a release |
+
+## Changelog
+
+Kept here until the next tagged release picks it up.
+
+### Unreleased
+
+- **Missing buff reminder** (Alerts): flags a class party buff missing from a
+  group member, but only for classes present in the group. Configurable wait
+  (15–60 s), party-chat / popup / both delivery, an anti-spam cooldown, and
+  per-class tracking of Arcane Intellect, Fortitude, Battle Shout, Mark of the
+  Wild, Skyfury, and Blessing of the Bronze. The party-chat announcement is
+  coordinated over an addon-message channel: when several group members run the
+  addon, only one posts and they share the cooldown.
+- **Note** (renamed from Notepad): a per-dungeon note window kept account-wide in
+  `MythicPlusTimerNotes` (keyed by the Encounter Journal instance id), with three
+  visibility modes. Holds a general dungeon note (editable any time) plus a note
+  per boss (editable only outside the fight). **Follow the fight** (on by default)
+  opens a boss's tab as you near or pull it and returns to the dungeon tab
+  afterwards. Notes render **markdown** when shown — `#`/`##`/`###` headings,
+  `-`/`1.` lists, `>` quotes, `---` dividers, `**bold**`, `*italic*`, `` `code` ``,
+  `~~strike~~` — and are raw text while editing; the scrollbar is slim and
+  appears only when the note overflows. Notes can be prepared ahead of time from
+  the Note settings tab, sharing the same store. Old flat-string notes migrate
+  into the dungeon slot.
+- **Automation** (Automation): auto repair (guild funds first), auto sell junk,
+  auto accept / turn in quests (always / never / in dungeons), a non-Mythic
+  difficulty warning, and keeping a new group listing on **Mythic+** across
+  dungeon changes. In dungeons a single unambiguous quest dialog is progressed,
+  but a "leave the instance" option is never auto-clicked. The listing default is
+  best-effort against Blizzard's protected create panel and wants in-game
+  verification; it never touches the List Group action, and a manual difficulty
+  pick is respected. A **default playstyle** (Off / Learning / Relaxed /
+  Competitive / Carry offered, default Competitive) can likewise be preselected
+  on a new listing — hardcoded values since `GetPlaystyleString` is protected.
+- **+2/+3 tick marks** on the run timer's time bar (Display), on by default.
+- **Settings**: the tab strip now wraps instead of running off the panel; choice
+  settings are dropdowns that open below the box with a chevron that flips up when
+  open; checkboxes, entry boxes and dropdowns line up in one control column;
+  General is the first tab, and the test-frames button (which now also toggles the
+  note window) lives there. The **Dungeons window** tab is renamed **Mythic+
+  Window**.
+- **Quieter**: routine confirmations (keystone slotted, repaired, junk sold,
+  test frames) no longer print to chat.
+- **Bug reports / feature requests**: the About tab and the CurseForge page now
+  link the GitHub Issues page, and `.github/ISSUE_TEMPLATE/` carries bug and
+  feature templates plus a config. Enabling Issues on the repo is a one-time
+  GitHub setting.
 
 ## Releases
 

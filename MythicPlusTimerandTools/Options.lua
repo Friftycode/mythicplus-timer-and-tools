@@ -74,9 +74,6 @@ local function togglePreviews()
   for _, p in ipairs(ns.previews) do
     pcall(previewShown and p.show or p.hide)
   end
-  ns.print(previewShown
-    and "test frames are up. Drag them where you want them, then use this again."
-    or "test frames hidden.")
 end
 
 ns.optionButton("Test frames", "Show or hide test frames",

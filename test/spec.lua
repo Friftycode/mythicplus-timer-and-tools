@@ -32,7 +32,7 @@ local keys, boxCount = {}, 0
 for _, page in pairs(settingsPages) do
   for key in pairs(page.checks) do keys[key] = true; boxCount = boxCount + 1 end
 end
-ok(boxCount == 15, "fifteen checkboxes drawn, got " .. boxCount)
+ok(boxCount == 33, "thirty-three checkboxes drawn, got " .. boxCount)
 ok(keys.mythicplustimer and keys.autonameplates and keys.letmefocus and keys.guildkeys
   and keys.autoslotkey and keys.joinpopup and keys.seasontp and keys.chatlinks
   and keys.chatcopy and keys.bloodlust and keys.minimapbutton,
@@ -42,7 +42,7 @@ for _, o in ipairs(MythicPlusTimerNamespace.OPTIONS) do
   ok(o.group ~= nil, "option '" .. o.key .. "' declares a section")
   ok(settingsPages[o.group] ~= nil,
     "option '" .. o.key .. "' has a tab for its group '" .. tostring(o.group) .. "'")
-  ok(settingsPages[o.group].checks[o.key] ~= nil,
+  ok(settingsPages[o.group].controls[o.key] ~= nil,
     "option '" .. o.key .. "' is drawn on that tab")
 end
 
@@ -342,13 +342,13 @@ end
 -- key in it, so nothing here waits for a second one.
 ok(MythicPlusTimerNamespace.cfg("autoslotkey") ~= false, "auto-slot is on unless switched off")
 
--- The key goes in, and the player is told.
+-- The key goes in, silently (the item visibly moving is feedback enough).
 Mock.slotted, Mock.cursor, Mock.inserts = false, nil, 0
 Mock.prints = {}
 openFont()
 ok(Mock.slotted, "the keystone is slotted when the Font of Power opens")
 ok(Mock.cursor == nil, "the cursor is left empty afterwards")
-has(table.concat(Mock.prints, "\n"), "placed", "it says so in chat rather than moving an item silently")
+ok(#Mock.prints == 0, "slotting the keystone writes nothing to chat")
 
 -- Already slotted: never disturb a key that is already in (it may be someone
 -- else's, and swapping it changes which dungeon the party runs).
@@ -976,7 +976,7 @@ for g in pairs(panels.settings.pages) do
 end
 
 local settings = panels.settings
-ok(settings.tabs["Mythic+ timer"] and settings.tabs["Dungeons window"] and settings.tabs["Chat"],
+ok(settings.tabs["Mythic+ timer"] and settings.tabs["Mythic+ Window"] and settings.tabs["Chat"],
   "a horizontal tab exists for each option group")
 ok(settings.tabs["Display"] == nil, "the display toggles no longer get a tab of their own")
 settings.select("Chat")
@@ -1018,9 +1018,9 @@ has(helpTip, "Draw the bosses section",
 cb.__scripts.OnEnter(cb)
 has(table.concat(GameTooltip.lines, "\n"), "Draw the bosses section",
   "hovering the checkbox explains it as well")
-ok(cb:GetChecked() == true, "a checkbox reflects the current setting")
-cb:SetChecked(false)
-cb.__scripts.OnClick(cb)
+ok(cb.check:GetChecked() == true, "a checkbox reflects the current setting")
+cb.check:SetChecked(false)
+cb.check.__scripts.OnClick(cb.check)
 ok(ns.cfg("showbosses") == false, "clicking a checkbox writes the setting")
 ns.setCfg("showbosses", true)
 
@@ -1074,6 +1074,436 @@ Mock.setChar("Bravo", "RealmOne")
 Mock.fire("PLAYER_LOGIN")
 ok(ns.activeProfile() == "Bravo PvE", "a character on its own profile keeps it")
 ok(ns.cfg("bloodlust") == true, "along with that profile's own settings")
+
+-- ── New features (buffs, notepad, automation, bar ticks) ───────────────────
+-- A clean run for the tick-mark and later feature checks.
+
+Mock.state.inInstance = true
+Mock.state.difficultyID = nil
+Mock.instanceID = 2290
+Mock.state.mapID = 375
+Mock.fire("CHALLENGE_MODE_RESET"); Mock.runTimers()
+Mock.fire("START_TIMER", 1, 10)
+Mock.fire("CHALLENGE_MODE_START")
+Mock.runTimers()
+Mock.advance(15, 1)
+
+-- Feature 4: +2/+3 tick marks on the time bar.
+local ov = overlay()
+ok(ov.timeBar.ticks[1]:IsShown(), "+3 tick shown on the time bar")
+ok(ov.timeBar.ticks[2]:IsShown(), "+2 tick shown on the time bar")
+local _, _, _, tx1 = ov.timeBar.ticks[1]:GetPoint()
+local _, _, _, tx2 = ov.timeBar.ticks[2]:GetPoint()
+-- Bar inner width is 220; +3 sits at 40% (88), +2 at 20% (44) from the left.
+ok(math.abs(tx1 - 88) < 0.5, "+3 tick at 40% of the bar, got " .. tostring(tx1))
+ok(math.abs(tx2 - 44) < 0.5, "+2 tick at 20% of the bar, got " .. tostring(tx2))
+ns.setCfg("showbarticks", false)
+Mock.advance(2, 1)
+ok(not ov.timeBar.ticks[1]:IsShown(), "ticks hidden when the option is off")
+ns.setCfg("showbarticks", true)
+Mock.fire("CHALLENGE_MODE_RESET"); Mock.runTimers()
+
+-- Feature 1: missing party-buff reminder. Present classes are Paladin (player),
+-- Priest (party1), Mage (party2), so Fortitude and Arcane Intellect are tracked;
+-- Skyfury etc. are not, since no Shaman/Warrior/Druid/Evoker is here. Chat
+-- delivery announces to the party via SendChatMessage, coordinated by addon
+-- message so only one client sends and they share the cooldown.
+local function buffChat()
+  local parts = {}
+  for _, c in ipairs(Mock.sentChat) do parts[#parts + 1] = c.msg end
+  return table.concat(parts, "\n")
+end
+Mock.state.inGroup = true
+Mock.auras = {
+  player = { 21562, 1459 },
+  party1 = { 21562 },          -- Healer, missing Arcane Intellect
+  party2 = { 21562, 1459 },
+}
+Mock.sentChat, Mock.sentAddon = {}, {}
+Mock.advance(25, 1)  -- past the 20s default threshold, plus the claim window
+local buffOut = buffChat()
+has(buffOut, "Arcane Intellect", "buff reminder announces the missing Arcane Intellect")
+has(buffOut, "Healer", "buff reminder names the member missing it")
+hasNot(buffOut, "Skyfury", "no reminder for a class that isn't in the group")
+hasNot(buffOut, "Fortitude", "no reminder for a buff everyone already has")
+ok(Mock.sentChat[1] and (Mock.sentChat[1].channel == "PARTY" or Mock.sentChat[1].channel == "INSTANCE_CHAT"),
+  "the reminder goes to party/instance chat")
+local sawSent = false
+for _, a in ipairs(Mock.sentAddon) do if a.msg:find("SENT:", 1, true) then sawSent = true end end
+ok(sawSent, "the sender broadcasts the shared cooldown to other addon users")
+
+-- Another client already announced (a SENT arrives): we hold off. Buff drops on
+-- a fresh member so it would otherwise be flagged.
+Mock.auras.party2 = { 21562 }  -- Dpsguy now missing Arcane Intellect
+Mock.sentChat = {}
+Mock.fire("CHAT_MSG_ADDON", "MPTTBuff", "SENT:300", "PARTY", "Someone")
+Mock.advance(25, 1)
+ok(#Mock.sentChat == 0, "holds off while another addon user's shared cooldown is active")
+Mock.auras.party2 = { 21562, 1459 }
+
+-- A rival with an earlier name claims during our window: we back off, they send.
+ns.setCfg("buffcooldown", false)
+Mock.fire("CHAT_MSG_ADDON", "MPTTBuff", "SENT:0", "PARTY", "x")  -- clear the shared cooldown
+Mock.auras.party1 = { 21562, 1459 }; Mock.advance(3, 1)  -- buff back: reset the episode
+Mock.auras.party1 = { 21562 }                            -- missing again
+Mock.sentChat, Mock.sentAddon = {}, {}
+-- Step until our own CLAIM goes out (before its window resolves), then a
+-- lower-sorting name claims first.
+local ourClaim = false
+for _ = 1, 120 do
+  Mock.advance(0.5, 0.5)
+  for _, a in ipairs(Mock.sentAddon) do if a.msg == "CLAIM:Testchar" then ourClaim = true end end
+  if ourClaim then break end
+end
+ok(ourClaim, "the client opens a claim before it sends")
+Mock.fire("CHAT_MSG_ADDON", "MPTTBuff", "CLAIM:Aaa", "PARTY", "Aaa")
+Mock.advance(1.5, 0.5)  -- our claim window resolves
+ok(#Mock.sentChat == 0, "backs off when a party member with an earlier name is announcing")
+
+-- Turning off that buff's class toggle stops tracking it.
+ns.setCfg("buffmage", false)
+Mock.auras.party1 = { 21562 }
+Mock.sentChat = {}
+Mock.advance(25, 1)
+hasNot(buffChat(), "Arcane Intellect", "an untracked buff is never flagged")
+ns.setCfg("buffmage", true)
+ns.setCfg("buffcooldown", true)
+
+-- Master toggle off: nothing is scanned or sent.
+ns.setCfg("buffreminder", false)
+Mock.sentChat = {}
+Mock.advance(25, 1)
+ok(#Mock.sentChat == 0, "no reminders while the feature is off")
+ns.setCfg("buffreminder", true)
+Mock.state.inGroup = false
+
+-- Feature 2: the Note window, keyed by the Encounter Journal instance id (500)
+-- so it shares its store with the prepare-ahead editor.
+ns.setCfg("notepad", true)
+ns.setCfg("notepadmode", "always")
+Mock.state.inEncounter = false
+Mock.state.ejInstance = 500
+Mock.fire("PLAYER_ENTERING_WORLD"); Mock.runTimers()
+local note = _G.MythicPlusTimerNotepad
+ok(note ~= nil and note:IsShown(), "the note window shows in a dungeon on the 'always' mode")
+
+-- Editing is a mode: click to edit, click away (commit) to save and re-render.
+local function editNote(text)
+  note.enterEdit()
+  note.edit:SetText(text)
+  note.commitEdit()
+end
+
+-- The default section is the dungeon note, saved under .dungeon.
+editNote("skip left after first boss")
+ok(MythicPlusTimerNotes[500] and MythicPlusTimerNotes[500].dungeon == "skip left after first boss",
+  "the dungeon note is saved under the journal instance id")
+
+-- Markdown renders in the view: a "---" line becomes a horizontal rule.
+editNote("## Plan\n---\n- kick the cast")
+ok(note.view.mdRules and note.view.mdRules[1] and note.view.mdRules[1]:IsShown(),
+  "a --- line renders as a horizontal rule")
+ok(note.view.mdLines and note.view.mdLines[1] and note.view.mdLines[1]:IsShown(),
+  "and the other markdown lines render")
+editNote("skip left after first boss")  -- restore
+
+-- The journal's bosses each get their own section; selecting one edits its note.
+ok(#note.sections == 3, "dungeon plus two bosses are listed, got " .. #note.sections)
+local bossKey = note.sections[2].key
+note.selectSection(bossKey)
+editNote("interrupt the cast")
+ok(MythicPlusTimerNotes[500].bosses[bossKey] == "interrupt the cast", "a boss note is saved under its own key")
+ok(MythicPlusTimerNotes[500].dungeon == "skip left after first boss", "and the dungeon note is untouched")
+
+-- A boss note is read-only once its fight is in progress; the dungeon note isn't.
+Mock.state.inEncounter = true
+note.selectSection(bossKey)
+note.enterEdit()
+ok(note.editing == false, "a boss note can't be entered for editing during the fight")
+note.selectSection("dungeon")
+editNote("edited during the run")
+ok(MythicPlusTimerNotes[500].dungeon == "edited during the run", "the dungeon note is still editable during a fight")
+Mock.state.inEncounter = false
+
+-- Follow the fight: ENCOUNTER_START opens that boss's tab, ENCOUNTER_END returns
+-- to the dungeon tab. Boss keys are "b" .. dungeonEncounterID (111 / 222).
+ns.setCfg("notebossauto", true)
+note.selectSection("dungeon")
+ok(note.sections[2].key == "b111", "boss keys come from the dungeon encounter id")
+Mock.fire("ENCOUNTER_START", 111)
+ok(note.title:GetText():find("First Boss", 1, true) ~= nil, "ENCOUNTER_START opens the pulled boss's tab")
+Mock.fire("ENCOUNTER_END", 111)
+ok(note.title:GetText():find("Dungeon", 1, true) ~= nil, "ENCOUNTER_END returns to the dungeon tab")
+
+-- Proximity: a boss-named target/nameplate auto-selects that boss's tab on the ticker.
+Mock.units.target = { name = "First Boss", class = "PALADIN", guid = "B-1" }
+Mock.advance(1.5, 0.5)
+ok(note.title:GetText():find("First Boss", 1, true) ~= nil, "a nearby boss auto-selects its tab")
+Mock.units.target = nil
+Mock.advance(1.5, 0.5)
+ok(note.title:GetText():find("Dungeon", 1, true) ~= nil, "with no boss near, it returns to the dungeon tab")
+
+-- With follow-the-fight off, it stays put.
+ns.setCfg("notebossauto", false)
+note.selectSection("dungeon")
+Mock.units.target = { name = "First Boss", class = "PALADIN", guid = "B-1" }
+Mock.advance(1.5, 0.5)
+ok(note.title:GetText():find("Dungeon", 1, true) ~= nil, "no auto-switch when following is off")
+Mock.units.target = nil
+ns.setCfg("notebossauto", true)
+
+-- The section column can be collapsed from the window, widening the note area,
+-- and the state persists in config.
+note.selectSection("dungeon")
+local toggleMenu = note.menuToggle:GetScript("OnClick")
+ok(note.col:IsShown(), "the section column shows by default")
+local narrowBefore = note.contentW
+toggleMenu()
+ok(not note.col:IsShown(), "clicking the toggle hides the section column")
+ok(ns.cfg("notepadmenu") == false, "the collapsed state is saved")
+ok(note.contentW > narrowBefore, "the note reclaims the column's width when it is hidden")
+toggleMenu()
+ok(note.col:IsShown() and ns.cfg("notepadmenu") == true, "clicking again brings the column back")
+
+-- An old flat-string note is migrated into the dungeon slot on next visit.
+MythicPlusTimerNotes[777] = "legacy note"
+Mock.state.ejInstance = 777
+Mock.fire("PLAYER_ENTERING_WORLD"); Mock.runTimers()
+ok(type(MythicPlusTimerNotes[777]) == "table" and MythicPlusTimerNotes[777].dungeon == "legacy note",
+  "a legacy flat-string note becomes the dungeon note")
+Mock.state.ejInstance = 500
+
+-- Prepare-ahead: the shared note API lists dungeons and edits their notes without
+-- being in the dungeon, and the in-window note reads the same store.
+local dungeons = ns.noteDungeonList()
+ok(#dungeons >= 2, "the prepare-ahead picker lists dungeons, got " .. #dungeons)
+ns.noteSet(501, "dungeon", "prepared before the run")
+ok(ns.noteGet(501, "dungeon") == "prepared before the run", "a dungeon can be noted ahead of time")
+local sections501 = ns.noteSectionList(501)
+ok(#sections501 == 2, "the picker lists that dungeon's bosses too, got " .. #sections501)
+
+-- The settings tab hosts the editor, wired to the same API.
+local noteEditor = settings.pages["Note"].noteEditor
+ok(noteEditor ~= nil, "the Note settings tab has a prepare-ahead editor")
+noteEditor.selectDungeon(501)
+noteEditor.selectSection("dungeon")
+ok(noteEditor.edit:GetText() == "prepared before the run", "the editor loads a prepared note")
+noteEditor.edit:SetText("edited from settings")
+noteEditor.edit.__scripts.OnTextChanged(noteEditor.edit)
+ok(ns.noteGet(501, "dungeon") == "edited from settings", "editing in settings writes the shared note")
+
+-- Hidden-during-key mode hides it while a keystone is live (the mock always has one).
+Mock.fire("PLAYER_ENTERING_WORLD"); Mock.runTimers()
+ns.setCfg("notepadmode", "hiddenrun")
+ns.optionChanged.notepadmode()
+ok(not note:IsShown(), "the note window is hidden for the whole run on 'hidden during key'")
+ns.setCfg("notepadmode", "always")
+ns.optionChanged.notepadmode()
+
+-- Feature 3a: auto repair. Personal gold first when no guild funds.
+ns.setCfg("autorepair", true)
+ns.setCfg("autorepairguild", true)
+Mock.merchant.repaired = nil
+Mock.merchant.canGuildRepair = false
+Mock.prints = {}
+Mock.fire("MERCHANT_SHOW")
+ok(Mock.merchant.repaired == "self", "auto repair falls back to personal gold")
+ok(#Mock.prints == 0, "auto repair does its work silently")
+-- Guild funds when allowed and they cover it.
+Mock.merchant.repaired = nil
+Mock.merchant.canGuildRepair = true
+Mock.merchant.guildWithdraw = -1  -- unlimited
+Mock.fire("MERCHANT_SHOW")
+ok(Mock.merchant.repaired == "guild", "auto repair prefers guild funds when it can")
+
+-- Feature 3b: auto sell junk. Add a grey item; only that one sells.
+Mock.GRAY_LINK = "|cff9d9d9d|Hitem:6948::::::::70:::::|h[Broken Fang]|h|r"
+Mock.bags[2] = { Mock.GRAY_LINK }
+Mock.sold = {}
+ns.setCfg("autosell", false)
+Mock.fire("MERCHANT_SHOW")
+ok(#Mock.sold == 0, "nothing sold while auto sell is off")
+ns.setCfg("autosell", true)
+Mock.prints = {}
+Mock.fire("MERCHANT_SHOW")
+ok(#Mock.sold == 1 and Mock.sold[1] == Mock.GRAY_LINK, "auto sell sells the grey item")
+ok(#Mock.prints == 0, "auto sell does its work silently")
+ns.setCfg("autosell", false)
+
+-- Feature 3c: auto accept and turn in. Default mode is dungeon-only; we're in one.
+ns.setCfg("autoquestmode", "dungeon")
+Mock.gossip.active = { { questID = 111, isComplete = true } }
+Mock.gossip.available = {}
+Mock.gossip.selectedActive = nil
+Mock.fire("GOSSIP_SHOW")
+ok(Mock.gossip.selectedActive == 111, "a completed quest is handed in at a gossip")
+Mock.gossip.active = {}
+Mock.gossip.available = { { questID = 222 } }
+Mock.gossip.selectedAvail = nil
+Mock.fire("GOSSIP_SHOW")
+ok(Mock.gossip.selectedAvail == 222, "an offered quest is accepted at a gossip")
+Mock.quest.accepted = false
+Mock.fire("QUEST_DETAIL")
+ok(Mock.quest.accepted, "a quest detail page is accepted")
+Mock.quest.completed = false
+Mock.quest.completable = true
+Mock.fire("QUEST_PROGRESS")
+ok(Mock.quest.completed, "a completable turn-in is completed")
+Mock.quest.rewardTaken = false
+Mock.quest.numChoices = 0
+Mock.fire("QUEST_COMPLETE")
+ok(Mock.quest.rewardTaken, "a no-choice reward is taken automatically")
+Mock.quest.rewardTaken = false
+Mock.quest.numChoices = 2
+Mock.fire("QUEST_COMPLETE")
+ok(not Mock.quest.rewardTaken, "a multi-choice reward is left for the player")
+-- Never mode does nothing.
+ns.setCfg("autoquestmode", "never")
+Mock.quest.accepted = false
+Mock.fire("QUEST_DETAIL")
+ok(not Mock.quest.accepted, "nothing auto-accepts when the mode is never")
+ns.setCfg("autoquestmode", "dungeon")
+
+-- Feature 3d: mythic difficulty warning.
+ns.setCfg("mythicwarn", true)
+Mock.state.difficultyID = 2  -- Heroic
+Mock.prints = {}
+Mock.fire("PLAYER_ENTERING_WORLD"); Mock.runTimers()
+has(table.concat(Mock.prints, "\n"), "not set to Mythic", "warns when the dungeon isn't Mythic")
+Mock.state.difficultyID = 23  -- Mythic
+Mock.prints = {}
+Mock.fire("PLAYER_ENTERING_WORLD"); Mock.runTimers()
+hasNot(table.concat(Mock.prints, "\n"), "not set to Mythic", "no warning when it is Mythic")
+Mock.state.difficultyID = nil
+ns.setCfg("mythicwarn", false)
+
+-- Gossip with no quests: a single benign option is progressed in a dungeon, but
+-- a "leave the instance" option is never auto-clicked.
+Mock.gossip.active = {}
+Mock.gossip.available = {}
+Mock.gossip.options = { { name = "Continue", gossipOptionID = 55 } }
+Mock.gossip.selectedOption = nil
+Mock.fire("GOSSIP_SHOW")
+ok(Mock.gossip.selectedOption == 55, "a single benign gossip option is progressed in a dungeon")
+Mock.gossip.options = { { name = "Teleport me out of the dungeon", gossipOptionID = 66 } }
+Mock.gossip.selectedOption = nil
+Mock.fire("GOSSIP_SHOW")
+ok(Mock.gossip.selectedOption == nil, "a leave-the-instance option is never auto-clicked")
+Mock.gossip.options = {}
+
+-- Feature 3e: default difficulty for a new listing. With Mythic+ chosen, a
+-- dungeon change to a lower difficulty is bumped to that dungeon's keystone
+-- activity; picking a difficulty yourself (same dungeon) is left alone.
+ns.setCfg("defaultdifficulty", "mythicplus")
+LFGListEntryCreation_Select({}, {}, 2, 42, 2000)  -- dungeon 42 auto-picks Heroic
+ok(Mock.lfgSelected.activity == 2002, "a dungeon change is forced onto the Mythic+ keystone")
+LFGListEntryCreation_Select({}, {}, 2, 42, 2000)  -- same dungeon, manual Heroic
+ok(Mock.lfgSelected.activity == 2000, "a manual difficulty pick on the same dungeon is respected")
+-- Choosing Heroic as the default keeps the listing on the Heroic activity.
+ns.setCfg("defaultdifficulty", "heroic")
+LFGListEntryCreation_Select({}, {}, 2, 46, 2001)  -- dungeon 46 picks Mythic (2001)
+ok(Mock.lfgSelected.activity == 2000, "the chosen default difficulty (Heroic) is applied")
+ns.setCfg("defaultdifficulty", "mythicplus")
+
+-- Default playstyle preselected on a dungeon change (Competitive by default).
+ns.setCfg("groupplaystyle", "3")
+LFGListEntryCreation.generalPlaystyle = nil
+LFGListEntryCreation_Select({}, {}, 2, 43, 2000)  -- new dungeon
+ok(LFGListEntryCreation.generalPlaystyle == Enum.LFGEntryGeneralPlaystyle.FunSerious,
+  "the default playstyle is preselected (Competitive)")
+-- A different default value.
+ns.setCfg("groupplaystyle", "1")
+LFGListEntryCreation.generalPlaystyle = nil
+LFGListEntryCreation_Select({}, {}, 2, 44, 2000)
+ok(LFGListEntryCreation.generalPlaystyle == Enum.LFGEntryGeneralPlaystyle.Learning,
+  "a chosen default playstyle (Learning) is used")
+-- Off leaves the playstyle alone.
+ns.setCfg("groupplaystyle", "off")
+LFGListEntryCreation.generalPlaystyle = nil
+LFGListEntryCreation_Select({}, {}, 2, 45, 2000)
+ok(LFGListEntryCreation.generalPlaystyle == nil, "playstyle is left untouched when set to Off")
+ns.setCfg("groupplaystyle", "3")
+
+-- Feature: party key share. Group members broadcast the keystone they hold, and
+-- the create panel offers everyone's keys as a dropdown.
+ns.setCfg("keyshare", true)
+Mock.state.inGroup = true
+Mock.ownedChallengeMapID = 375  -- Mists of Tirna Scithe
+Mock.ownedKeyLevel = 12
+
+local function lastAddon(prefix)
+  for i = #Mock.sentAddon, 1, -1 do
+    if Mock.sentAddon[i].prefix == prefix then return Mock.sentAddon[i].msg end
+  end
+  return nil
+end
+
+-- A roster change re-announces our own key (after the debounce).
+Mock.sentAddon = {}
+Mock.fire("GROUP_ROSTER_UPDATE"); Mock.advance(1.5)
+ok(lastAddon("MPTTKey") == "K:375:12", "own keystone is broadcast on a roster change")
+
+-- A peer's key arrives and joins the list; the highest key sorts first.
+Mock.fire("CHAT_MSG_ADDON", "MPTTKey", "K:376:15", "PARTY", "Frifty-Realm")
+local kl = ns.keyShareList()
+ok(#kl == 2, "the list holds our key and the peer's")
+ok(kl[1].name == "Frifty" and kl[1].level == 15, "the higher peer key sorts above our own")
+ok(kl[1].label == "Frifty - The Necrotic Wake +15", "a row reads 'name - dungeon +level'")
+ok(kl[2].name ~= "Frifty" and kl[2].level == 12, "our own key is the other row")
+
+-- Picking a key fills in that dungeon's activity and the "+level" title.
+LFGListEntryCreation.Name.text = ""
+Mock.lfgSelected = nil
+local mine
+for _, e in ipairs(kl) do if e.dungeon == "Mists of Tirna Scithe" then mine = e end end
+ns.keyShareApply(mine)
+ok(Mock.lfgSelected and Mock.lfgSelected.activity == 2003, "the chosen key selects that dungeon's activity")
+ok(LFGListEntryCreation.Name.text == "+12", "the chosen key fills the title with '+level'")
+
+-- A title the player already typed is never overwritten.
+LFGListEntryCreation.Name.text = "chill run"
+ns.keyShareApply(mine)
+ok(LFGListEntryCreation.Name.text == "chill run", "an existing title is left alone")
+
+-- A REQ from a peer prompts us to re-broadcast.
+Mock.sentAddon = {}
+Mock.fire("CHAT_MSG_ADDON", "MPTTKey", "REQ", "PARTY", "Someone-Realm")
+Mock.advance(1.5)
+ok(lastAddon("MPTTKey") == "K:375:12", "a REQ from a peer re-broadcasts our key")
+
+-- With the feature off, nothing is broadcast and no key is collected.
+ns.setCfg("keyshare", false)
+Mock.sentAddon = {}
+Mock.fire("GROUP_ROSTER_UPDATE"); Mock.advance(1.5)
+ok(lastAddon("MPTTKey") == nil, "nothing is broadcast while the share is off")
+Mock.fire("CHAT_MSG_ADDON", "MPTTKey", "K:377:20", "PARTY", "Latecomer-Realm")
+local off = ns.keyShareList()
+local sawLate = false
+for _, e in ipairs(off) do if e.name == "Latecomer" then sawLate = true end end
+ok(not sawLate, "a peer key is ignored while the share is off")
+ns.setCfg("keyshare", true)
+Mock.state.inGroup = false
+
+-- Feature: reply to "!keys" in chat with the keystone link from your bags.
+ns.setCfg("keylink", true)
+Mock.sentChat = {}
+Mock.fire("CHAT_MSG_PARTY", "!keys", "Someone"); Mock.advance(0.2)
+local said = Mock.sentChat[#Mock.sentChat]
+ok(said and said.channel == "PARTY" and said.msg:find("Hkeystone", 1, true),
+  "!keys in party posts the keystone link to party")
+Mock.sentChat = {}
+Mock.fire("CHAT_MSG_GUILD", "  !KEYS  ", "Guildie"); Mock.advance(0.2)
+ok(Mock.sentChat[1] and Mock.sentChat[1].channel == "GUILD", "!keys is case- and space-insensitive, and answers guild in guild")
+-- A sentence that merely mentions it is ignored.
+Mock.sentChat = {}
+Mock.fire("CHAT_MSG_PARTY", "post your !keys please", "Someone"); Mock.advance(0.2)
+ok(#Mock.sentChat == 0, "only a bare !keys triggers a reply")
+-- Off switch.
+ns.setCfg("keylink", false)
+Mock.sentChat = {}
+Mock.fire("CHAT_MSG_PARTY", "!keys", "Someone"); Mock.advance(0.2)
+ok(#Mock.sentChat == 0, "no reply when the keystone linker is off")
+ns.setCfg("keylink", true)
 
 -- ── Report ────────────────────────────────────────────────────────────────
 

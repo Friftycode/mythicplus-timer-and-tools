@@ -1,6 +1,5 @@
 local _, ns = ...
 
-local GOLD, GREY, WHITE, ENDC = ns.GOLD, ns.GREY, ns.WHITE, ns.ENDC
 local cfg, mptPrint = ns.cfg, ns.print
 
 -- ── Auto-slot the keystone ───────────────────────────────────────────────
@@ -93,9 +92,6 @@ local function autoSlotKeystone(verbose)
     end
     pcall(C_ChallengeMode.SlotKeystone)
     keyLastReason = "placed the keystone"
-    -- Say so: an item moving on its own should never be a silent surprise.
-    print(GOLD .. "Mythic+ Timer and Tools" .. ENDC .. GREY .. ": placed " .. ENDC
-      .. link .. GREY .. " in the font." .. ENDC)
   end)
 end
 

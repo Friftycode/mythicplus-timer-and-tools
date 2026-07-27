@@ -68,6 +68,56 @@ local DEFAULTS = {
   -- it sits around the ring, and is set by dragging the button.
   minimapbutton = true,
   minimapangle = 225,
+  -- Thin white tick marks on the run's time bar at the +2 and +3 upgrade windows.
+  showbarticks = true,
+
+  -- Buff reminder: flags a class party buff missing from a member for a while,
+  -- but only for classes actually in the group. Delivery and the anti-spam
+  -- cooldown are configurable; each class buff can be tracked or not.
+  buffreminder = true,
+  buffthreshold = 20,        -- seconds a buff must be missing before it counts (15-60)
+  buffdelivery = "chat",     -- "chat" | "popup" | "both"
+  buffcooldown = true,       -- gate alerts behind a cooldown instead of always firing
+  buffcooldownmins = 5,      -- minutes between alerts while buffcooldown is on (1-30)
+  buffmage = true,           -- Arcane Intellect
+  buffpriest = true,         -- Power Word: Fortitude
+  buffwarrior = true,        -- Battle Shout
+  buffdruid = true,          -- Mark of the Wild
+  buffshaman = true,         -- Skyfury
+  buffevoker = true,         -- Blessing of the Bronze
+  buffpoint = nil,           -- { point, x, y } of the popup alert
+
+  -- Instance notepad: a small note window tied to the dungeon you are in. The
+  -- note text itself is account-wide (MythicPlusTimerNotes), not a profile value.
+  -- Off by default: a note window appearing unasked would surprise people.
+  notepad = false,
+  notepadmode = "always",    -- "always" | "hiddenuntilstart" | "hiddenrun"
+  notepadlocked = false,
+  notepadpoint = nil,        -- { point, x, y } of the note window
+  notebossauto = true,       -- follow the fight: open a boss's tab near/at it, else the dungeon tab
+  -- The note window's section column: shown or collapsed, toggled by a button on
+  -- the window itself (not a settings checkbox), so it stays out of OPTIONS.
+  notepadmenu = true,
+
+  -- Automation: the vendor/quest/difficulty conveniences.
+  autorepair = true,         -- repair on visiting a merchant
+  autorepairguild = true,    -- prefer guild-bank funds before personal gold
+  autosell = false,          -- sell grey (junk) items on a merchant visit
+  autoquestmode = "dungeon", -- "always" | "never" | "dungeon" (auto accept/turn-in)
+  mythicwarn = false,        -- warn when the dungeon isn't set to Mythic difficulty
+  -- Default difficulty for a new group listing as you switch dungeons: "off", or
+  -- "normal"/"heroic"/"mythic"/"mythicplus".
+  defaultdifficulty = "mythicplus",
+  -- Default "Select Playstyle" for a new listing: "off", or the playstyle value
+  -- ("1" Learning, "2" Relaxed, "3" Competitive, "4" Carry offered).
+  groupplaystyle = "3",
+  -- Party-key share: broadcast your own keystone to group members running this
+  -- addon, and offer their keys as a dropdown on the create-a-group panel so one
+  -- click fills in the dungeon and the "+level" title.
+  keyshare = true,
+  -- Reply to "!keys" in party/guild/instance chat with your own keystone link, so
+  -- anyone (addon or not) can ask for it. Works without this addon on their end.
+  keylink = true,
 }
 ns.DEFAULTS = DEFAULTS
 
@@ -75,30 +125,57 @@ ns.DEFAULTS = DEFAULTS
 -- the heading above it; rows sharing either must stay adjacent, or the heading
 -- would be drawn twice.
 ns.OPTIONS = {
+  { key = "minimapbutton", group = "General", section = "Minimap button", label = "Show the minimap button", tooltip = "Show a small button on the minimap. Click it for a menu: open Settings, toggle Let me focus, or hide the button. Drag the button to move it around the minimap." },
   { key = "mythicplustimer", group = "Mythic+ timer", section = "The overlay", label = "M+ run timer overlay", tooltip = "Show a movable overlay during an active Mythic+ run: time remaining, the +2/+3 upgrade windows, enemy forces, bosses, and deaths." },
   { key = "letmefocus", group = "Mythic+ timer", section = "The overlay", label = "Let me focus", tooltip = "Click the clock or the deaths on the overlay to hide them. Click again to bring them back. Useful on a pull where the timer is a distraction." },
   { key = "showaffixes", group = "Mythic+ timer", section = "What the overlay shows", label = "Show affixes", tooltip = "Draw this week's affix icons on the overlay. Turning this off removes the block for good, rather than hiding it for one run." },
   { key = "showforces", group = "Mythic+ timer", section = "What the overlay shows", label = "Show enemy forces", tooltip = "Draw the enemy forces percentage on the overlay, and turn the row green once the count is done." },
   { key = "showbosses", group = "Mythic+ timer", section = "What the overlay shows", label = "Show bosses", tooltip = "Draw the bosses section on the overlay, with each one ticked off as it dies." },
   { key = "showdeaths", group = "Mythic+ timer", section = "What the overlay shows", label = "Show deaths", tooltip = "Draw the deaths section on the overlay, with the time they have cost the run." },
+  { key = "showbarticks", group = "Mythic+ timer", section = "What the overlay shows", label = "Show +2/+3 tick marks", tooltip = "Draw thin white tick lines on the time bar marking the +2 and +3 upgrade windows." },
   { key = "autoslotkey", group = "Mythic+ timer", section = "Starting a key", label = "Auto-slot your keystone", tooltip = "Place your keystone into the Font of Power automatically when it is opened, so you do not have to drag it in." },
   { key = "autonameplates", group = "Mythic+ timer", section = "During a key", label = "Enable enemy nameplates in keys", tooltip = "Turn on enemy nameplates at the start of a Mythic+ key, then put your own setting back when the key ends." },
-  { key = "seasontp", group = "Dungeons window", section = "Season Best", label = "Teleport from Season Best icons", tooltip = "Click a dungeon under Season Best in the Mythic+ Dungeons window to teleport there, when you have earned that teleport." },
-  { key = "guildkeys", group = "Dungeons window", section = "Your guild", label = "Guild keys this week", tooltip = "Add a panel to the Mythic+ Dungeons window listing your guild's best keys for the current week." },
+  { key = "seasontp", group = "Mythic+ Window", section = "Season Best", label = "Teleport from Season Best icons", tooltip = "Click a dungeon under Season Best in the Mythic+ Dungeons window to teleport there, when you have earned that teleport." },
+  { key = "guildkeys", group = "Mythic+ Window", section = "Your guild", label = "Guild keys this week", tooltip = "Add a panel to the Mythic+ Dungeons window listing your guild's best keys for the current week." },
   { key = "chatlinks", group = "Chat", section = "Links", label = "Clickable links in chat", tooltip = "Turn web addresses in chat into a link. Click one to copy it." },
   { key = "chatcopy", group = "Chat", section = "Copying", label = "Copy button on the chat window", tooltip = "Add a Copy button to each chat window. It opens that window's text in a box you can select and copy." },
   { key = "joinpopup", group = "Alerts", section = "Group finder", label = "Show which key you joined", tooltip = "When you join a group through the Group Finder, show the dungeon you were accepted into, its party, and a teleport button when you have one." },
   { key = "bloodlust", group = "Alerts", section = "Group chat", label = "Alert when bloodlust is called", tooltip = "Show a short on-screen alert when someone in your group types bl, hero, lust, drums, or the like." },
-  { key = "minimapbutton", group = "General", section = "Minimap button", label = "Show the minimap button", tooltip = "Show a small button on the minimap. Click it for a menu: open Settings, toggle Let me focus, or hide the button. Drag the button to move it around the minimap." },
+  { key = "buffreminder", group = "Alerts", section = "Buff reminder", label = "Remind about missing party buffs", tooltip = "Flag a class party buff that has been missing from a group member for a while. Only classes actually in the group are checked." },
+  { key = "buffthreshold", type = "number", min = 15, max = 60, group = "Alerts", section = "Buff reminder", label = "Missing for at least (seconds)", tooltip = "How long a buff must be missing from a member before it is flagged. Between 15 and 60 seconds." },
+  { key = "buffdelivery", type = "choice", choices = { { value = "chat", label = "Party chat" }, { value = "popup", label = "Popup" }, { value = "both", label = "Both" } }, group = "Alerts", section = "Buff reminder", label = "Show the reminder as", tooltip = "A message in party chat, an on-screen popup, or both. Party-chat messages are coordinated between group members running this addon, so only one is posted and they share the wait below." },
+  { key = "buffcooldown", group = "Alerts", section = "Buff reminder", label = "Limit how often it reminds", tooltip = "Wait between reminders instead of flagging every missing buff. Turn off to be reminded whenever a buff is missing. The wait is shared with other group members running this addon." },
+  { key = "buffcooldownmins", type = "number", min = 1, max = 30, group = "Alerts", section = "Buff reminder", label = "Wait between reminders (minutes)", tooltip = "Minutes to wait between reminders while the limit above is on. Between 1 and 30." },
+  { key = "buffmage", group = "Alerts", section = "Which buffs", label = "Arcane Intellect (Mage)", tooltip = "Track Arcane Intellect when a Mage is in the group." },
+  { key = "buffpriest", group = "Alerts", section = "Which buffs", label = "Power Word: Fortitude (Priest)", tooltip = "Track Power Word: Fortitude when a Priest is in the group." },
+  { key = "buffwarrior", group = "Alerts", section = "Which buffs", label = "Battle Shout (Warrior)", tooltip = "Track Battle Shout when a Warrior is in the group." },
+  { key = "buffdruid", group = "Alerts", section = "Which buffs", label = "Mark of the Wild (Druid)", tooltip = "Track Mark of the Wild when a Druid is in the group." },
+  { key = "buffshaman", group = "Alerts", section = "Which buffs", label = "Skyfury (Shaman)", tooltip = "Track Skyfury when a Shaman is in the group." },
+  { key = "buffevoker", group = "Alerts", section = "Which buffs", label = "Blessing of the Bronze (Evoker)", tooltip = "Track Blessing of the Bronze when an Evoker is in the group." },
+  { key = "notepad", group = "Note", section = "The note window", label = "Show the note window", tooltip = "A note window that appears in a dungeon, with a general dungeon note plus a note per boss. Each dungeon keeps its own notes, and they survive a reload or wipe." },
+  { key = "notepadmode", type = "choice", choices = { { value = "always", label = "Always visible" }, { value = "hiddenuntilstart", label = "Until key starts" }, { value = "hiddenrun", label = "Hidden during key" } }, group = "Note", section = "The note window", label = "When to show it", tooltip = "Always while in the dungeon, only once a keystone has started, or hidden for the whole keystone run." },
+  { key = "notepadlocked", group = "Note", section = "The note window", label = "Lock the note window", tooltip = "Stop the note window from being dragged. You can also lock it from the window itself." },
+  { key = "notebossauto", group = "Note", section = "The note window", label = "Follow the fight", tooltip = "Automatically open a boss's tab as you get near it or pull it, and go back to the Dungeon tab once the boss is down or you leave. Turn off to switch tabs yourself." },
+  { key = "autorepair", group = "Automation", section = "At a merchant", label = "Auto repair", tooltip = "Repair your gear automatically when you talk to a merchant that can repair." },
+  { key = "autorepairguild", group = "Automation", section = "At a merchant", label = "Use guild funds first", tooltip = "Repair from the guild bank when you are allowed to, and only fall back to your own gold otherwise." },
+  { key = "autosell", group = "Automation", section = "At a merchant", label = "Auto sell junk", tooltip = "Sell all grey (junk) quality items automatically when you talk to a merchant." },
+  { key = "autoquestmode", type = "choice", choices = { { value = "dungeon", label = "In dungeons" }, { value = "always", label = "Always" }, { value = "never", label = "Never" } }, group = "Automation", section = "Quests", label = "Auto accept and turn in quests", tooltip = "Automatically accept and hand in quests. In dungeons only, everywhere, or never. Quests that reward a choice of items are left for you." },
+  { key = "defaultdifficulty", type = "choice", choices = { { value = "off", label = "Off" }, { value = "normal", label = "Normal" }, { value = "heroic", label = "Heroic" }, { value = "mythic", label = "Mythic" }, { value = "mythicplus", label = "Mythic+" } }, group = "Automation", section = "Start a Dungeon Group", label = "Default difficulty", tooltip = "When you create a group listing, keep it on this difficulty as you switch dungeons instead of letting it reset. You can still pick another difficulty yourself. Off leaves it alone." },
+  { key = "groupplaystyle", type = "choice", choices = { { value = "off", label = "Off" }, { value = "1", label = "Learning" }, { value = "2", label = "Relaxed" }, { value = "3", label = "Competitive" }, { value = "4", label = "Carry offered" } }, group = "Automation", section = "Start a Dungeon Group", label = "Default playstyle", tooltip = "Preselect the required \"Select Playstyle\" on a new group listing. Off leaves it for you to pick; otherwise it defaults to the chosen playstyle, which you can still change." },
+  { key = "mythicwarn", group = "Automation", section = "Start a Dungeon Group", label = "Warn if not set to Mythic", tooltip = "Warn you when you enter a dungeon that is not set to Mythic difficulty." },
+  { key = "keyshare", group = "Automation", section = "Start a Dungeon Group", label = "Party key dropdown", tooltip = "Share your own keystone with group members running this addon, and add a dropdown to the create-a-group panel listing everyone's keys. Pick one to fill in that dungeon and a \"+level\" title; the difficulty and playstyle stay on your defaults above." },
+  { key = "keylink", group = "Chat", section = "Keystone", label = "Reply to \"!keys\" with your key", tooltip = "When someone types !keys in party, instance, or guild chat, post a link to the keystone you are carrying. Works for anyone asking, whether or not they run this addon." },
 }
 
 -- Drawn under the tab strip: a tab name alone does not say what it changes.
 ns.TAB_DESC = {
   ["Mythic+ timer"] = "The overlay during a run, what it shows, and what happens as a key starts.",
-  ["Dungeons window"] = "What this addon adds inside Blizzard's own Mythic+ Dungeons window.",
+  ["Mythic+ Window"] = "What this addon adds inside Blizzard's own Mythic+ Dungeons window.",
   ["Chat"] = "What it adds to your chat windows.",
   ["Alerts"] = "Notices that appear on screen while you play.",
-  ["General"] = "The minimap button and other addon-wide settings.",
+  ["Note"] = "Per-dungeon notes: a general dungeon note plus a note per boss, and where to prepare them ahead of time.",
+  ["Automation"] = "Small conveniences at merchants, quest givers, and the group finder.",
+  ["General"] = "The minimap button, the movable test frames, and other addon-wide settings.",
   ["About"] = "Which version you are on, and where to find the addon.",
 }
 
@@ -115,7 +192,7 @@ local activeProfile   -- name of the profile in use this session
 local DEFAULT_PROFILE = "Default"
 -- Point tables have a nil default, so they never appear in DEFAULTS; listed here
 -- so profile export and per-profile sanitize still know about them.
-local POINT_KEYS = { "mppoint", "jppoint", "blpoint" }
+local POINT_KEYS = { "mppoint", "jppoint", "blpoint", "buffpoint", "notepadpoint" }
 
 local function charKey()
   local name, realm
@@ -154,6 +231,23 @@ local function cleanProfile(src)
   end
   if type(clean.mpscale) == "number" then
     clean.mpscale = math.max(0.6, math.min(2.0, clean.mpscale))
+  end
+  if type(clean.buffthreshold) == "number" then
+    clean.buffthreshold = math.max(15, math.min(60, math.floor(clean.buffthreshold + 0.5)))
+  end
+  if type(clean.buffcooldownmins) == "number" then
+    clean.buffcooldownmins = math.max(1, math.min(30, math.floor(clean.buffcooldownmins + 0.5)))
+  end
+  -- Choice keys accept only their known values; anything else falls to default.
+  local CHOICES = {
+    buffdelivery = { chat = true, popup = true, both = true },
+    notepadmode = { always = true, hiddenuntilstart = true, hiddenrun = true },
+    autoquestmode = { always = true, never = true, dungeon = true },
+    groupplaystyle = { off = true, ["1"] = true, ["2"] = true, ["3"] = true, ["4"] = true },
+    defaultdifficulty = { off = true, normal = true, heroic = true, mythic = true, mythicplus = true },
+  }
+  for key, allowed in pairs(CHOICES) do
+    if clean[key] ~= nil and not allowed[clean[key]] then clean[key] = nil end
   end
   for _, key in ipairs(POINT_KEYS) do
     local p = src[key]

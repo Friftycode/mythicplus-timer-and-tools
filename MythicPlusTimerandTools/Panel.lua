@@ -1,13 +1,23 @@
 local _, ns = ...
 
 local GOLD, GREY, WHITE, ENDC = ns.GOLD, ns.GREY, ns.WHITE, ns.ENDC
+local GOLD_RGB = ns.GOLD_RGB
 local cfg, setCfg = ns.cfg, ns.setCfg
+
+-- Writes a setting and runs its live-update hook, the one path every control uses.
+local function applySet(key, v)
+  setCfg(key, v)
+  local ch = ns.optionChanged[key]
+  if ch then pcall(ch) end
+end
 
 -- The addon's settings screen: horizontal tabs over Blizzard's vertical stack,
 -- and the Profiles page. Every control reads and writes through cfg/setCfg.
 
 local TAB_H, TAB_GAP, STRIP_Y = 26, 4, -14
-local DESC_Y, CONTENT_Y = -48, -74
+-- Right edge the tab strip wraps at, so a long row of tabs drops to a new line
+-- rather than running off the settings panel.
+local TAB_WRAP = 600
 local ROW_H, SECTION_GAP = 26, 14
 
 -- The active tab is a solid gold-brown; an inactive one is a distinct dark box
@@ -66,32 +76,206 @@ local function helpIcon(parent, anchorTo, title, body)
   return h
 end
 
-local function checkbox(parent, label, get, set, tooltip)
-  local cb = CreateFrame("CheckButton", nil, parent)
-  cb:SetSize(22, 22)
-  cb:SetNormalTexture("Interface\\Buttons\\UI-CheckBox-Up")
-  cb:SetPushedTexture("Interface\\Buttons\\UI-CheckBox-Down")
-  cb:SetHighlightTexture("Interface\\Buttons\\UI-CheckBox-Highlight")
-  cb:SetCheckedTexture("Interface\\Buttons\\UI-CheckBox-Check")
-  cb.label = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  cb.label:SetPoint("LEFT", cb, "RIGHT", 4, 0)
-  cb.label:SetText(label)
-  cb.refresh = function() cb:SetChecked(get() and true or false) end
-  cb:SetScript("OnClick", function(self) set(self:GetChecked() and true or false) end)
-  if tooltip and tooltip ~= "" then
-    cb.help = helpIcon(parent, cb.label, label, tooltip)
-    attachTooltip(cb, label, tooltip)
-  end
-  cb.refresh()
-  return cb
-end
-
 local function button(parent, label, w, onClick)
   local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
   b:SetSize(w or 110, 22)
   b:SetText(label)
   b:SetScript("OnClick", onClick)
   return b
+end
+
+-- A labelled row control: the label sits at the left, the control (an entry box
+-- or a cycling button) at CONTROL_X. Shared shape so number and choice rows line
+-- up under a heading the same way the checkboxes do.
+local CONTROL_X = 250
+
+local function labelledRow(parent, label, tooltip)
+  local c = CreateFrame("Frame", nil, parent)
+  c:SetSize(440, 26)
+  c.label = c:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  c.label:SetPoint("LEFT", c, "LEFT", 0, 0)
+  c.label:SetText(label)
+  if tooltip and tooltip ~= "" then
+    c.help = helpIcon(c, c.label, label, tooltip)
+    attachTooltip(c, label, tooltip)
+  end
+  return c
+end
+
+-- The dark box + tooltip border shared by the entry boxes and the dropdowns, so
+-- they all line up at the control column with the same left edge and look.
+local function boxBackdrop(f, r, g, b, a)
+  if not f.SetBackdrop then return end
+  f:SetBackdrop({
+    bgFile = "Interface\\Buttons\\WHITE8X8",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    tile = false, edgeSize = 12,
+    insets = { left = 3, right = 3, top = 3, bottom = 3 },
+  })
+  f:SetBackdropColor(r, g, b, a)
+  f:SetBackdropBorderColor(0.4, 0.35, 0.25, 1)
+end
+
+-- A whole-number entry, clamped to [minv, maxv] on commit. Same box as the
+-- dropdowns, anchored at the control column, so it lines up with them.
+local function numberControl(parent, label, get, set, minv, maxv, tooltip)
+  local c = labelledRow(parent, label, tooltip)
+  local e = CreateFrame("EditBox", nil, c, "BackdropTemplate")
+  e:SetSize(52, 22)
+  e:SetPoint("LEFT", c, "LEFT", CONTROL_X, 0)
+  boxBackdrop(e, 0.10, 0.10, 0.12, 1)
+  e:SetAutoFocus(false)
+  e:SetNumeric(true)
+  e:SetMaxLetters(4)
+  e:SetJustifyH("LEFT")
+  e:SetTextInsets(8, 6, 0, 0)
+  e:SetFontObject("ChatFontNormal")
+  local function commit(self)
+    local v = tonumber(self:GetText()) or minv
+    v = math.max(minv, math.min(maxv, math.floor(v + 0.5)))
+    set(v)
+    self:SetText(tostring(v))
+    self:ClearFocus()
+  end
+  e:SetScript("OnEnterPressed", commit)
+  e:SetScript("OnEditFocusLost", commit)
+  e:SetScript("OnEscapePressed", function(self) self:ClearFocus(); c.refresh() end)
+  c.editbox = e
+  c.refresh = function() e:SetText(tostring(get())) end
+  c.refresh()
+  return c
+end
+
+-- A checkbox on the shared row: label at the left, the box in the control
+-- column, so it lines up with the entry boxes and dropdowns.
+local function checkbox(parent, label, get, set, tooltip)
+  local c = labelledRow(parent, label, tooltip)
+  local cb = CreateFrame("CheckButton", nil, c)
+  cb:SetSize(24, 24)
+  cb:SetPoint("LEFT", c, "LEFT", CONTROL_X, 0)
+  cb:SetNormalTexture("Interface\\Buttons\\UI-CheckBox-Up")
+  cb:SetPushedTexture("Interface\\Buttons\\UI-CheckBox-Down")
+  cb:SetHighlightTexture("Interface\\Buttons\\UI-CheckBox-Highlight")
+  cb:SetCheckedTexture("Interface\\Buttons\\UI-CheckBox-Check")
+  cb:SetScript("OnClick", function(self) set(self:GetChecked() and true or false) end)
+  c.check = cb
+  c.refresh = function() cb:SetChecked(get() and true or false) end
+  c.refresh()
+  return c
+end
+
+-- The down chevron on a dropdown, made by rotating the small triangle: it points
+-- down when closed and flips up while the list is open, like a web select.
+local ARROW_DOWN, ARROW_UP = -math.pi / 2, math.pi / 2
+
+-- A reusable dropdown: a box showing the current value, whose list opens right
+-- below it (not a side menu). A full-screen catcher behind the list closes it on
+-- an outside click. Wire it with :SetChoices, :SetValue, and .onSelect.
+local function dropdownWidget(parent, width)
+  local ROWH = 20
+  local d = CreateFrame("Button", nil, parent, "BackdropTemplate")
+  d:SetSize(width or 180, 22)
+  boxBackdrop(d, 0.10, 0.10, 0.12, 1)
+  hoverTint(d, 0.06)
+  d.text = d:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  d.text:SetPoint("LEFT", d, "LEFT", 8, 0)
+  d.text:SetPoint("RIGHT", d, "RIGHT", -20, 0)
+  d.text:SetJustifyH("LEFT")
+  d.arrow = d:CreateTexture(nil, "OVERLAY")
+  d.arrow:SetSize(14, 14)
+  d.arrow:SetPoint("RIGHT", d, "RIGHT", -5, 0)
+  d.arrow:SetTexture("Interface\\ChatFrame\\ChatFrameExpandArrow")
+  d.arrow:SetRotation(ARROW_DOWN)
+
+  -- Parented to UIParent, not the settings canvas: the canvas is a ScrollBox that
+  -- re-levels its children, which would push the open list behind sibling
+  -- controls and make its rows unclickable. Anchored to the box across parents.
+  local menu = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+  menu:SetFrameStrata("TOOLTIP")
+  menu:SetWidth(width or 180)
+  menu:SetPoint("TOPLEFT", d, "BOTTOMLEFT", 0, -2)
+  boxBackdrop(menu, 0.06, 0.06, 0.08, 0.98)
+  menu:EnableMouse(true)
+  menu:Hide()
+
+  local closer = CreateFrame("Button", nil, UIParent)
+  closer:SetAllPoints(UIParent)
+  closer:SetFrameStrata("FULLSCREEN_DIALOG")
+  closer:Hide()
+
+  d.choices, d.rows = {}, {}
+  local function labelFor(v)
+    for _, ch in ipairs(d.choices) do if ch.value == v then return ch.label end end
+    return d.placeholder or ""
+  end
+  local function close()
+    menu:Hide(); closer:Hide(); d.arrow:SetRotation(ARROW_DOWN)
+  end
+  d.close = close
+  closer:SetScript("OnClick", close)
+
+  local function rebuild()
+    for _, r in ipairs(d.rows) do r:Hide() end
+    for i, ch in ipairs(d.choices) do
+      local r = d.rows[i]
+      if not r then
+        r = CreateFrame("Button", nil, menu)
+        r:SetHeight(ROWH)
+        hoverTint(r, 0.14)
+        r.text = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        r.text:SetPoint("LEFT", r, "LEFT", 6, 0)
+        r.text:SetPoint("RIGHT", r, "RIGHT", -4, 0)
+        r.text:SetJustifyH("LEFT")
+        r.text:SetWordWrap(false)
+        d.rows[i] = r
+      end
+      r.text:SetText(ch.label)
+      r:ClearAllPoints()
+      r:SetPoint("TOPLEFT", menu, "TOPLEFT", 4, -4 - (i - 1) * ROWH)
+      r:SetPoint("TOPRIGHT", menu, "TOPRIGHT", -4, -4 - (i - 1) * ROWH)
+      r:SetScript("OnClick", function()
+        d.value = ch.value
+        d.text:SetText(ch.label)
+        close()
+        if d.onSelect then d.onSelect(ch.value) end
+      end)
+      r:Show()
+    end
+    menu:SetHeight(math.max(1, #d.choices) * ROWH + 8)
+  end
+
+  -- Strata does the layering: the catcher sits above the settings canvas, the
+  -- list above the catcher, so the rows always take the click.
+  d:SetScript("OnClick", function()
+    if menu:IsShown() then close() return end
+    rebuild()
+    closer:Show()
+    menu:Show()
+    menu:Raise()
+    d.arrow:SetRotation(ARROW_UP)
+  end)
+
+  function d:SetChoices(list) d.choices = list or {} end
+  function d:SetValue(v) d.value = v; d.text:SetText(labelFor(v)) end
+  function d:GetValue() return d.value end
+  return d
+end
+
+-- Shared so other files (e.g. the party-key dropdown on the create panel) get the
+-- same dropdown look and open-below behaviour.
+ns.dropdownWidget = dropdownWidget
+
+-- A one-of-N setting bound to cfg get/set, drawn on the shared row.
+local function choiceControl(parent, label, get, set, choices, tooltip)
+  local c = labelledRow(parent, label, tooltip)
+  local d = dropdownWidget(c, 180)
+  d:SetPoint("LEFT", c, "LEFT", CONTROL_X, 0)
+  d:SetChoices(choices)
+  d.onSelect = function(v) set(v) end
+  c.button = d
+  c.refresh = function() d:SetValue(get()) end
+  c.refresh()
+  return c
 end
 
 local function well(parent, w, h)
@@ -110,6 +294,82 @@ local function well(parent, w, h)
   return f
 end
 
+-- A multi-line edit box that clips to a well and grows a slim scrollbar only when
+-- the text overflows, so nothing spills outside the box.
+local function scrollBox(parent, w, h)
+  local box = well(parent, w, h)
+  local scroll = CreateFrame("ScrollFrame", nil, box)
+  scroll:SetPoint("TOPLEFT", box, "TOPLEFT", 8, -7)
+  scroll:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -12, 7)
+  scroll:EnableMouse(true)
+  scroll:EnableMouseWheel(true)
+
+  local edit = CreateFrame("EditBox", nil, scroll)
+  edit:SetMultiLine(true)
+  edit:SetAutoFocus(false)
+  edit:SetFontObject("ChatFontNormal")
+  edit:SetWidth(w - 24)
+  edit:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  scroll:SetScrollChild(edit)
+
+  local sbar = CreateFrame("Slider", nil, box)
+  sbar:SetWidth(5)
+  sbar:SetPoint("TOPRIGHT", box, "TOPRIGHT", -5, -7)
+  sbar:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -5, 7)
+  sbar:SetOrientation("VERTICAL")
+  sbar:SetMinMaxValues(0, 0)
+  sbar:SetValueStep(1)
+  sbar:SetObeyStepOnDrag(true)
+  local track = sbar:CreateTexture(nil, "BACKGROUND")
+  track:SetAllPoints()
+  track:SetColorTexture(1, 1, 1, 0.06)
+  local thumb = sbar:CreateTexture(nil, "OVERLAY")
+  thumb:SetColorTexture(GOLD_RGB[1], GOLD_RGB[2], GOLD_RGB[3], 0.55)
+  thumb:SetSize(5, 30)
+  sbar:SetThumbTexture(thumb)
+  sbar:SetScript("OnValueChanged", function(_, v) scroll:SetVerticalScroll(v) end)
+  sbar:Hide()
+
+  local function update()
+    local childH = edit:GetHeight() or 0
+    local viewH = scroll:GetHeight()
+    local range = math.max(0, childH - viewH)
+    box.range = range
+    if range > 1 then
+      sbar:SetMinMaxValues(0, range)
+      sbar:SetValue(math.min(scroll:GetVerticalScroll(), range))
+      sbar:Show()
+    else
+      scroll:SetVerticalScroll(0)
+      sbar:Hide()
+    end
+  end
+
+  scroll:SetScript("OnMouseWheel", function(self, delta)
+    local r = box.range or 0
+    if r <= 0 then return end
+    local v = math.min(r, math.max(0, self:GetVerticalScroll() - delta * 24))
+    self:SetVerticalScroll(v)
+    sbar:SetValue(v)
+  end)
+  edit:SetScript("OnCursorChanged", function(_, _, cy, _, chh)
+    local top = -cy
+    local vs = scroll:GetVerticalScroll()
+    local viewH = scroll:GetHeight()
+    if top < vs then
+      scroll:SetVerticalScroll(top)
+    elseif top + chh > vs + viewH then
+      scroll:SetVerticalScroll(top + chh - viewH)
+    end
+    sbar:SetValue(scroll:GetVerticalScroll())
+  end)
+
+  box.edit = edit
+  box.scroll = scroll
+  box.update = update
+  return box
+end
+
 -- InputBoxTemplate's art is drawn for one line and spills past a taller box, so
 -- multi-line gets a plain edit box inside a well instead.
 local function editbox(parent, w, multiline, height)
@@ -121,14 +381,10 @@ local function editbox(parent, w, multiline, height)
     e:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     return e
   end
-  local box = well(parent, w or 200, height or 46)
-  local e = CreateFrame("EditBox", nil, box)
-  e:SetPoint("TOPLEFT", box, "TOPLEFT", 8, -7)
-  e:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -8, 7)
-  e:SetAutoFocus(false)
-  e:SetMultiLine(true)
-  e:SetFontObject("ChatFontNormal")
-  e:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  -- Clips and scrolls, so a long profile string never spills outside the box.
+  local box = scrollBox(parent, w or 200, height or 46)
+  local e = box.edit
+  e:SetScript("OnTextChanged", function() box.update() end)
   -- Callers position the well, not the edit box inside it.
   e.container = box
   return e
@@ -249,12 +505,122 @@ local function buildAbout(page)
   ghLabel:SetText(GREY .. "GitHub" .. ENDC)
   page.github = urlBox(page, GITHUB_URL, 4, -200)
 
+  local issuesLabel = page:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  issuesLabel:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -232)
+  issuesLabel:SetWidth(440)
+  issuesLabel:SetJustifyH("LEFT")
+  issuesLabel:SetText(GREY .. "Found a bug, or want a feature? Open an issue on GitHub:" .. ENDC)
+  page.issues = urlBox(page, GITHUB_URL .. "/issues", 4, -250)
+
   local hint = page:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  hint:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -232)
+  hint:SetPoint("TOPLEFT", page, "TOPLEFT", 0, -282)
   hint:SetWidth(440)
   hint:SetJustifyH("LEFT")
   hint:SetText(GREY .. "Click a link to select it, then copy with Ctrl+C." .. ENDC)
   return page
+end
+
+-- ── Prepare-ahead note editor (Note tab) ─────────────────────────────────────
+-- Pick any dungeon and boss and write its note before you set foot inside. It
+-- reads and writes the same account-wide store the in-dungeon window uses.
+local function buildNoteEditor(page, y)
+  local ed = { dungeonKey = nil, section = "dungeon", loading = false }
+
+  page.sections[#page.sections + 1] = heading(page, "Prepare notes ahead of time", 0, y, 452)
+  y = y - 26
+
+  -- Markdown is explained here (behind a help icon, to save space), not on the
+  -- note window, so the window itself stays clean.
+  local md = page:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  md:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
+  md:SetText(GREY .. "Notes support markdown when shown." .. ENDC)
+  helpIcon(page, md, "Markdown", table.concat({
+    "Rendered when a note isn't being edited:",
+    "",
+    "#  ##  ###   headings",
+    "-  or  1.    lists",
+    ">            quote",
+    "---          divider",
+    "**bold**   *italic*   `code`   ~~strike~~",
+    "",
+    "Click a note to edit the raw text.",
+  }, "\n"))
+  y = y - 24
+
+  local function labelAt(text, yy)
+    local fs = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    fs:SetPoint("TOPLEFT", page, "TOPLEFT", 0, yy)
+    fs:SetText(text)
+    return fs
+  end
+
+  labelAt("Dungeon", y + 3)
+  ed.dungeonDD = dropdownWidget(page, 210)
+  ed.dungeonDD:SetPoint("TOPLEFT", page, "TOPLEFT", CONTROL_X, y)
+  ed.dungeonDD.placeholder = "Pick a dungeon"
+  y = y - 28
+
+  labelAt("Section", y + 3)
+  ed.sectionDD = dropdownWidget(page, 210)
+  ed.sectionDD:SetPoint("TOPLEFT", page, "TOPLEFT", CONTROL_X, y)
+  ed.sectionDD.placeholder = "Dungeon"
+  y = y - 30
+
+  local box = scrollBox(page, 452, 92)
+  box:SetPoint("TOPLEFT", page, "TOPLEFT", 0, y)
+  ed.box = box
+  ed.edit = box.edit
+  ed.edit:SetScript("OnTextChanged", function(self)
+    box.update()
+    if ed.loading or not ed.dungeonKey then return end
+    ns.noteSet(ed.dungeonKey, ed.section, self:GetText())
+  end)
+
+  local function load()
+    ed.loading = true
+    ed.edit:SetText(ed.dungeonKey and ns.noteGet(ed.dungeonKey, ed.section) or "")
+    -- SetText parks the cursor at the end, scrolling a long note to the bottom;
+    -- start it at the top instead.
+    ed.edit:SetCursorPosition(0)
+    box.scroll:SetVerticalScroll(0)
+    ed.loading = false
+    box.update()
+  end
+
+  ed.selectSection = function(section)
+    ed.section = section
+    ed.sectionDD:SetValue(section)
+    load()
+  end
+  ed.sectionDD.onSelect = function(v) ed.selectSection(v) end
+
+  ed.selectDungeon = function(key)
+    ed.dungeonKey = key
+    ed.dungeonDD:SetValue(key)
+    local choices = {}
+    for _, s in ipairs(ns.noteSectionList(key)) do
+      choices[#choices + 1] = { value = s.key, label = s.name }
+    end
+    ed.sectionDD:SetChoices(choices)
+    ed.selectSection("dungeon")
+  end
+  ed.dungeonDD.onSelect = function(v) ed.selectDungeon(v) end
+
+  -- The journal may not have answered at login; repopulate the dungeon list each
+  -- time the page is shown, and select one so the Section list is never empty.
+  ed.refresh = function()
+    local list = ns.noteDungeonList()
+    local choices = {}
+    for _, d in ipairs(list) do choices[#choices + 1] = { value = d.key, label = d.name } end
+    ed.dungeonDD:SetChoices(choices)
+    if not ed.dungeonKey and list[1] then
+      ed.selectDungeon(list[1].key)
+    elseif ed.dungeonKey then
+      ed.dungeonDD:SetValue(ed.dungeonKey)
+    end
+  end
+  ed.refresh()
+  return ed
 end
 
 -- ── Settings sub-page ────────────────────────────────────────────────────────
@@ -272,8 +638,6 @@ local function buildSettings()
   panel.tabs, panel.pages = {}, {}
 
   panel.desc = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  panel.desc:SetPoint("TOPLEFT", panel, "TOPLEFT", 24, DESC_Y)
-  panel.desc:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -24, DESC_Y)
   panel.desc:SetJustifyH("LEFT")
 
   local function select(group)
@@ -285,32 +649,55 @@ local function buildSettings()
   end
   panel.select = select
 
+  -- Every tab, About included, so the whole strip is laid out (and wrapped) as
+  -- one before any page is placed under it.
+  local tabOrder = {}
+  for _, g in ipairs(order) do tabOrder[#tabOrder + 1] = g end
+  tabOrder[#tabOrder + 1] = ABOUT
+
+  -- The tab strip wraps to more rows when the next tab would run past the panel,
+  -- so a growing set of features never pushes tabs off the right edge.
+  local rowX, rowY, rows = 16, STRIP_Y, 1
+  for _, g in ipairs(tabOrder) do
+    local tab = tabButton(panel, g)
+    local w = tab:GetWidth()
+    if rowX > 16 and rowX + w > TAB_WRAP then
+      rowX = 16
+      rowY = rowY - (TAB_H + TAB_GAP)
+      rows = rows + 1
+    end
+    tab:SetPoint("TOPLEFT", panel, "TOPLEFT", rowX, rowY)
+    tab:SetScript("OnClick", function() select(g) end)
+    panel.tabs[g] = tab
+    rowX = rowX + w + TAB_GAP
+  end
+
+  -- Everything below the strip shifts down by however many rows it grew to.
+  local stripY = STRIP_Y - (rows - 1) * (TAB_H + TAB_GAP) - TAB_H
   local strip = panel:CreateTexture(nil, "ARTWORK")
   strip:SetHeight(1)
   paint(strip, { 1, 1, 1, 0.25 })
-  strip:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, STRIP_Y - TAB_H)
-  strip:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -16, STRIP_Y - TAB_H)
+  strip:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, stripY)
+  strip:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -16, stripY)
 
-  local x = 16
-  local function addTab(g)
-    local tab = tabButton(panel, g)
-    tab:SetPoint("TOPLEFT", panel, "TOPLEFT", x, STRIP_Y)
-    tab:SetScript("OnClick", function() select(g) end)
-    panel.tabs[g] = tab
-    x = x + tab:GetWidth() + TAB_GAP
+  panel.desc:SetPoint("TOPLEFT", panel, "TOPLEFT", 24, stripY - 12)
+  panel.desc:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -24, stripY - 12)
+  local contentY = stripY - 34
 
+  local function newPage(g)
     local page = CreateFrame("Frame", nil, panel)
-    page:SetPoint("TOPLEFT", panel, "TOPLEFT", 24, CONTENT_Y)
+    page:SetPoint("TOPLEFT", panel, "TOPLEFT", 24, contentY)
     page:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -16, 16)
     page:Hide()
     page.checks = {}
+    page.controls = {}
     page.sections = {}
     panel.pages[g] = page
     return page
   end
 
   for _, g in ipairs(order) do
-    local page = addTab(g)
+    local page = newPage(g)
     local yy, lastSection = 0, nil
     for _, o in ipairs(byGroup[g]) do
       local sec = o.section or g
@@ -320,19 +707,26 @@ local function buildSettings()
         lastSection = sec
         yy = yy - 26
       end
-      local cb = checkbox(page, o.label,
-        function() return cfg(o.key) end,
-        function(v) setCfg(o.key, v); local ch = ns.optionChanged[o.key]; if ch then pcall(ch) end end,
-        o.tooltip)
-      cb:SetPoint("TOPLEFT", page, "TOPLEFT", 0, yy)
+      local get = function() return cfg(o.key) end
+      local set = function(v) applySet(o.key, v) end
+      local control
+      if o.type == "number" then
+        control = numberControl(page, o.label, get, set, o.min or 0, o.max or 100, o.tooltip)
+      elseif o.type == "choice" then
+        control = choiceControl(page, o.label, get, set, o.choices or {}, o.tooltip)
+      else
+        control = checkbox(page, o.label, get, set, o.tooltip)
+        page.checks[o.key] = control
+      end
+      control:SetPoint("TOPLEFT", page, "TOPLEFT", 0, yy)
       yy = yy - ROW_H
-      page.checks[o.key] = cb
+      page.controls[o.key] = control
     end
     page.nextY = yy
   end
 
-  -- Option buttons go on the first tab: the overlay is the frame people come
-  -- here to move, and there is nowhere else for a non-checkbox control to live.
+  -- Test-frame buttons live on the General tab (order[1]), alongside the other
+  -- addon-wide controls.
   local firstPage = panel.pages[order[1]]
   if firstPage and #ns.optionButtons > 0 then
     local yy = (firstPage.nextY or 0) - SECTION_GAP
@@ -348,12 +742,21 @@ local function buildSettings()
     end
   end
 
-  buildAbout(addTab(ABOUT))
+  -- The Note tab carries the prepare-ahead editor, below its options.
+  local notePage = panel.pages["Note"]
+  if notePage then
+    notePage.noteEditor = buildNoteEditor(notePage, (notePage.nextY or 0) - SECTION_GAP)
+  end
+
+  buildAbout(newPage(ABOUT))
   order[#order + 1] = ABOUT
 
   panel.refresh = function()
     for _, page in pairs(panel.pages) do
-      for _, cb in pairs(page.checks) do cb.refresh() end
+      for _, control in pairs(page.controls) do
+        if control.refresh then control.refresh() end
+      end
+      if page.noteEditor and page.noteEditor.refresh then pcall(page.noteEditor.refresh) end
     end
   end
   -- Two of these pages exist (see ns.buildPanels), so each redraws as it is

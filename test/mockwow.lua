@@ -216,7 +216,14 @@ end
 -- default; a test sets them apart to check the mismatch guard.
 Mock.ownedKeyMapID = 2290
 Mock.instanceID = 2290
-C_MythicPlus = { GetOwnedKeystoneMapID = function() return Mock.ownedKeyMapID end }
+-- The player's own keystone, for the party-key share dropdown.
+Mock.ownedChallengeMapID = 375
+Mock.ownedKeyLevel = 12
+C_MythicPlus = {
+  GetOwnedKeystoneMapID = function() return Mock.ownedKeyMapID end,
+  GetOwnedKeystoneChallengeMapID = function() return Mock.ownedChallengeMapID end,
+  GetOwnedKeystoneLevel = function() return Mock.ownedKeyLevel end,
+}
 
 ChallengesKeystoneFrame = CreateFrame("Frame", "ChallengesKeystoneFrame")
 
@@ -317,7 +324,7 @@ C_ScenarioInfo = { GetCriteriaInfo = function(i) return Mock.state.criteria[i] e
 -- so the shape matters here, not just the first three.
 function GetInstanceInfo()
   if Mock.state.inInstance then
-    return "Mists", "party", 8, "Mythic Keystone", 5, 0, false, Mock.instanceID
+    return "Mists", "party", Mock.state.difficultyID or 8, "Mythic Keystone", 5, 0, false, Mock.instanceID
   end
   return "Elwynn", "none", 0, "", 0, 0, false, 0
 end
@@ -379,9 +386,18 @@ function IsMouseButtonDown() return false end
 function GetCursorPosition() return 0, 0 end
 function InCombatLockdown() return Mock.inCombat end
 function IsInGuild() return Mock.state.inGuild end
-function hooksecurefunc(tbl, name, fn)
-  local orig = tbl[name]
-  tbl[name] = function(...) orig(...) ; fn(...) end
+-- Supports both real forms: hooksecurefunc(name, fn) hooks a global, and
+-- hooksecurefunc(table, name, fn) hooks a table field.
+function hooksecurefunc(a, b, c)
+  if type(a) == "string" then
+    local name, fn = a, b
+    local orig = _G[name]
+    _G[name] = function(...) if orig then orig(...) end fn(...) end
+  else
+    local tbl, name, fn = a, b, c
+    local orig = tbl[name]
+    tbl[name] = function(...) orig(...) ; fn(...) end
+  end
 end
 
 C_CVar = {
@@ -397,6 +413,183 @@ RAID_CLASS_COLORS = {
 -- is gated on actually having a lust ability.
 Mock.playerSpells = { [2825] = true }
 function IsPlayerSpell(id) return Mock.playerSpells[id] == true end
+
+-- ── Group and auras (buff reminder) ────────────────────────────────────────
+-- Off by default so the buff scanner stays dormant through the timer tests; the
+-- buff-reminder section turns it on.
+Mock.state.inGroup = false
+Mock.state.inRaidGroup = false
+Mock.groupMembers = 3
+function IsInGroup() return Mock.state.inGroup and true or false end
+function IsInRaid() return Mock.state.inRaidGroup and true or false end
+function GetNumGroupMembers() return Mock.groupMembers or 0 end
+
+-- Buffs a unit currently has, as a list of spell ids. GetAuraDataByIndex walks
+-- the list; a unit absent from the table simply has no buffs.
+Mock.auras = {}
+C_UnitAuras = {
+  GetAuraDataByIndex = function(unit, index)
+    local id = Mock.auras[unit] and Mock.auras[unit][index]
+    if not id then return nil end
+    return { spellId = id, name = "Buff " .. id }
+  end,
+}
+
+-- Encounter Journal + map, for the notepad's per-boss note list.
+Mock.state.uiMap = 2000
+Mock.state.ejInstance = 500
+Mock.state.inEncounter = false
+Mock.ejEncounters = {
+  { name = "First Boss", deid = 111 },
+  { name = "Last Boss", deid = 222 },
+}
+C_Map = C_Map or {}
+C_Map.GetBestMapForUnit = function(_) return Mock.state.uiMap end
+function EJ_GetInstanceForMap(_) return Mock.state.ejInstance end
+function EJ_SelectInstance(id) Mock.state.ejSelected = id end
+function EJ_GetEncounterInfoByIndex(i, instID)
+  local e = (Mock.ejBossesByInstance and Mock.ejBossesByInstance[instID]) or Mock.ejEncounters
+  local b = e[i]
+  if not b then return nil end
+  return b.name, "desc", 1000 + i, 0, "link", instID, b.deid, instID
+end
+function IsEncounterInProgress() return Mock.state.inEncounter and true or false end
+
+-- The Encounter Journal dungeon list, for the prepare-ahead note picker.
+Mock.ejTiers = 3
+Mock.ejDungeons = {
+  { instID = 500, name = "Test Dungeon" },
+  { instID = 501, name = "Other Dungeon" },
+}
+Mock.ejBossesByInstance = {
+  [500] = Mock.ejEncounters,
+  [501] = { { name = "Lone Boss", deid = 333 } },
+}
+function EJ_GetNumTiers() return Mock.ejTiers end
+function EJ_SelectTier(t) Mock.state.ejTier = t end
+function EJ_GetInstanceByIndex(i, isRaid)
+  if isRaid then return nil end
+  local d = Mock.ejDungeons[i]
+  if not d then return nil end
+  return d.instID, d.name
+end
+
+-- Nameplates, for the note window's "follow the fight" proximity check.
+Mock.namePlates = {}
+C_NamePlate = { GetNamePlates = function() return Mock.namePlates end }
+
+-- Party-chat announce + addon-message coordination for the buff reminder.
+Mock.state.partyLFG = false
+function IsPartyLFG() return Mock.state.partyLFG and true or false end
+Mock.sentChat = {}
+function SendChatMessage(msg, channel) Mock.sentChat[#Mock.sentChat + 1] = { msg = msg, channel = channel } end
+Mock.sentAddon = {}
+C_ChatInfo = {
+  RegisterAddonMessagePrefix = function() return true end,
+  SendAddonMessage = function(prefix, msg, channel)
+    Mock.sentAddon[#Mock.sentAddon + 1] = { prefix = prefix, msg = msg, channel = channel }
+    return true
+  end,
+}
+
+-- ── Merchant (auto repair / sell junk) ─────────────────────────────────────
+Mock.merchant = {
+  canRepair = true, repairCost = 5000, canGuildRepair = false,
+  guildWithdraw = 0, money = 1000000, repaired = nil,
+}
+function CanMerchantRepair() return Mock.merchant.canRepair end
+function GetRepairAllCost() return Mock.merchant.repairCost, Mock.merchant.repairCost > 0 end
+function RepairAllItems(guild) Mock.merchant.repaired = guild and "guild" or "self" end
+function CanGuildBankRepair() return Mock.merchant.canGuildRepair end
+function GetGuildBankWithdrawMoney() return Mock.merchant.guildWithdraw end
+function GetMoney() return Mock.merchant.money end
+function GetCoinTextureString(c) return tostring(c) .. "c" end
+-- Only the 11th return (sell price) is read by the junk seller.
+function GetItemInfo(_) return nil, nil, 0, 0, 0, 0, 0, 0, 0, 0, 25 end
+
+local QUALITY_HEX = {
+  ["9d9d9d"] = 0, ["ffffff"] = 1, ["1eff00"] = 2,
+  ["0070dd"] = 3, ["a335ee"] = 4, ["ff8000"] = 5,
+}
+local function qualityOfLink(link)
+  local hex = type(link) == "string" and link:match("|cff(%x%x%x%x%x%x)")
+  return (hex and QUALITY_HEX[hex]) or 1
+end
+Mock.sold = {}
+C_Container.GetContainerItemInfo = function(bag, slot)
+  local link = (Mock.bags[bag] or {})[slot]
+  if not link then return nil end
+  return { hyperlink = link, quality = qualityOfLink(link), stackCount = 1, hasNoValue = false }
+end
+C_Container.UseContainerItem = function(bag, slot)
+  local b = Mock.bags[bag]
+  if b and b[slot] then Mock.sold[#Mock.sold + 1] = b[slot]; b[slot] = nil end
+end
+
+-- ── Quests / gossip (auto accept and turn in) ──────────────────────────────
+Mock.gossip = {
+  active = {}, available = {}, options = {},
+  selectedActive = nil, selectedAvail = nil, selectedOption = nil,
+}
+C_GossipInfo = {
+  GetActiveQuests = function() return Mock.gossip.active end,
+  GetAvailableQuests = function() return Mock.gossip.available end,
+  GetOptions = function() return Mock.gossip.options end,
+  SelectActiveQuest = function(id) Mock.gossip.selectedActive = id end,
+  SelectAvailableQuest = function(id) Mock.gossip.selectedAvail = id end,
+  SelectOption = function(id) Mock.gossip.selectedOption = id end,
+}
+Mock.quest = {
+  accepted = false, completed = false, rewardTaken = false, rewardIndex = nil,
+  numChoices = 0, completable = true, numActive = 0, numAvail = 0,
+  selActive = nil, selAvail = nil,
+}
+function AcceptQuest() Mock.quest.accepted = true end
+function CompleteQuest() Mock.quest.completed = true end
+function GetQuestReward(i) Mock.quest.rewardTaken = true; Mock.quest.rewardIndex = i end
+function GetNumQuestChoices() return Mock.quest.numChoices end
+function IsQuestCompletable() return Mock.quest.completable end
+function GetNumActiveQuests() return Mock.quest.numActive end
+function GetNumAvailableQuests() return Mock.quest.numAvail end
+function SelectActiveQuest(i) Mock.quest.selActive = i end
+function SelectAvailableQuest(i) Mock.quest.selAvail = i end
+
+-- ── Group finder create panel (force Mythic) ───────────────────────────────
+Mock.activities[2000] = { fullName = "Test Dungeon (Heroic)", isMythicPlusActivity = false, groupFinderActivityGroupID = 100 }
+Mock.activities[2001] = { fullName = "Test Dungeon (Mythic)", isMythicPlusActivity = false, groupFinderActivityGroupID = 100 }
+Mock.activities[2002] = { fullName = "Test Dungeon (Mythic Keystone)", isMythicPlusActivity = true, groupFinderActivityGroupID = 100 }
+-- A second dungeon, named the way GetMapUIInfo names challenge map 375, so the
+-- party-key share can map a shared key back to its create-panel activity.
+Mock.activities[2003] = { fullName = "Mists of Tirna Scithe (Mythic Keystone)", isMythicPlusActivity = true, groupFinderActivityGroupID = 375 }
+Mock.lfgGroupActivities = { [42] = { 2000, 2001, 2002, 2003 } }
+C_LFGList.GetAvailableActivities = function(_, group)
+  return Mock.lfgGroupActivities[group] or Mock.lfgGroupActivities[42]
+end
+Mock.lfgSelected = nil
+function LFGListEntryCreation_Select(self, filters, cat, group, activity)
+  Mock.lfgSelected = { cat = cat, group = group, activity = activity }
+end
+-- The create panel's own frame, with a playstyle dropdown that reports itself
+-- shown (Mythic+ offers a playstyle). The addon sets generalPlaystyle on it via
+-- LFGListEntryCreation_OnPlayStyleSelectedInternal, mirroring the real client.
+-- (Enum.LFGEntryGeneralPlaystyle is defined with the other enums below.)
+LFGListEntryCreation = {
+  generalPlaystyle = nil,
+  selectedCategory = 2,
+  selectedFilters = 0,
+  -- The title box, whose text the party-key share fills with "+level".
+  Name = {
+    text = "",
+    GetText = function(self) return self.text end,
+    SetText = function(self, t) self.text = t end,
+  },
+  PlayStyleDropdown = {
+    shown = true,
+    IsShown = function(self) return self.shown end,
+    GenerateMenu = function() end,
+  },
+}
+function LFGListEntryCreation_OnPlayStyleSelectedInternal(self, v) self.generalPlaystyle = v end
 
 -- Item-quality colors, so the score coloring runs its real path. Approximate
 -- Blizzard values, enough to tell the tiers apart.
@@ -462,6 +655,7 @@ Enum = {
   PlayerInteractionType = { ChallengeMode = 53 },
   SpellBookItemType = { Spell = "SPELL", Flyout = "FLYOUT" },
   SpellBookSpellBank = { Player = 0 },
+  LFGEntryGeneralPlaystyle = { None = 0, Learning = 1, FunRelaxed = 2, FunSerious = 3, Expert = 4 },
 }
 
 -- Version is date-shaped, the way the release job stamps it.
@@ -470,6 +664,7 @@ C_AddOns = {
     local meta = { Version = "2026.7.24", Title = "Mythic+ Timer and Tools" }
     return meta[field]
   end,
+  LoadAddOn = function() return true end,
 }
 
 Settings = {
