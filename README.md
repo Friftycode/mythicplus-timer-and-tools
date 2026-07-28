@@ -34,10 +34,10 @@ A retail World of Warcraft addon with two pieces:
   move it around the minimap. Bring it back from **General** in the Settings.
 - **Missing buff reminder**: flags a class party buff that has gone missing from
   a group member, but only for classes actually in the group (no nagging for
-  Skyfury with no Shaman around). Inside a Mythic+ dungeon it stays quiet until
-  the key is actually under way, so nothing is posted while the group is still
-  buffing before the run. The wait before it flags, whether it shows in chat or
-  as a popup, an anti-spam cooldown, and which class buffs to track are all
+  Skyfury with no Shaman around). It only posts inside a dungeon once the key is
+  actually under way, never out in the world, in a raid, or while the group is
+  still buffing before the run. The wait before it flags, whether it shows in chat
+  or as a popup, an anti-spam cooldown, and which class buffs to track are all
   configurable.
 - **Note**: a note window tied to the dungeon you're standing in, with one
   general dungeon note plus a note per boss (pulled from the Encounter Journal).
@@ -61,8 +61,9 @@ A retail World of Warcraft addon with two pieces:
 - **Party, invites, and duels**: opt-in handling of what other players send you,
   ported from Leatrix Plus and living on the **Automation** tab. Auto-accept a
   party invite from a friend, auto-confirm the role check when a friend queues
-  you (with your last used role, or a fixed Tank/Healer/Damage role your spec
-  can fill), invite anyone who whispers a keyword (friends-only optional), and block
+  you (with your last used role, or a chosen set of Tank/Healer/DPS roles, using
+  only the ones your spec can fill), invite anyone who whispers a keyword
+  (friends-only optional), and block
   party invites, "requested to join" confirmations, or duels from anyone who
   isn't a friend. Guild members count as friends by default; communities are an
   opt-in. Every behaviour is off until you turn it on.
@@ -71,10 +72,12 @@ A retail World of Warcraft addon with two pieces:
   button in the Settings panel (or `/mpt frames`) puts them all up at once, each
   filled with example content (the run overlay shows a mid-key snapshot: clock,
   upgrade windows, enemy forces, boss kills, and a death per party member) and
-  wearing a light-blue overlay like Blizzard's Edit Mode. Drag a frame to move
-  it, resize the ones with a grip (the run overlay and the note window) right
-  there, or click it to jump straight to that frame's settings; Escape closes
-  them all.
+  wearing a light-blue overlay like Blizzard's Edit Mode, centred on a large
+  "Click to Edit". Hovering a frame names it in a tooltip by the cursor. Drag a
+  frame to move it, resize the ones with a grip (the run overlay and the note
+  window) right there, or click it to jump straight to that frame's settings.
+  Opening the test frames hides the Settings window and puts up a small "Close
+  test frames" control; closing them (its button or Escape) brings Settings back.
 
 - **Update reminder**: an addon can't reach the internet to check for a new
   release, so two offline signals stand in. Releases are date-stamped, so a
@@ -125,7 +128,8 @@ out under horizontal tabs, and **Profiles**.
 | Automation | Keep new listings on Mythic+ | on | Hold a group listing on the Mythic+ keystone as you switch dungeons; a manual pick is respected |
 | Automation | Default playstyle | Competitive | Preselect the required "Select Playstyle" on a new listing (Off / Learning / Relaxed / Competitive / Carry offered) |
 | Automation | Accept party invites from friends | off | Auto-accept a party invite from a friend (unless you're queued) |
-| Automation | Confirm role when a friend queues | off | Auto-confirm the role check when the leader who started it is a friend; confirm with your last used role or a fixed Tank/Healer/Damage role (a role your spec cannot fill is ignored) |
+| Automation | Confirm role when a friend queues | off | Auto-confirm the role check when the leader who started it is a friend; confirm with your last used role or a chosen set of roles |
+| Automation | Roles to confirm as | Tank, Healer, DPS | Which roles "Chosen roles" confirms as; only roles your current spec can fill are used, so an all-roles set still queues a DPS-only alt as DPS |
 | Automation | Invite when whispered a keyword | off | Invite whoever whispers your keyword (default "inv"); a "Keyword" box and an "Only invite friends" toggle sit beside it |
 | Automation | Block party invites | off | Decline party invites from anyone who isn't a friend |
 | Automation | Block requested invites | off | Decline "requested to join your group" confirmations from non-friends |
@@ -270,15 +274,32 @@ Kept here until the next tagged release picks it up.
 
 ### Unreleased
 
-- **Choose the confirmed role** (Automation): "Confirm role when a friend queues"
-  is now a choice, not just on/off. Confirm with your last used role, or pin it
-  to Tank, Healer, or Damage. A role your current spec cannot fill is ignored, so
-  the pick never queues you as something you can't play. An existing on/off
-  setting carries over (on becomes "Last used role").
-- **Buff reminder holds until the key starts**: inside a Mythic+ dungeon the
-  missing-buff reminder no longer posts (chat or popup) until the run is actually
-  under way, so the group is not nagged while it is still buffing before the key.
-  Outside a dungeon (raids, an open-world group) it behaves as before.
+- **Confirm as multiple roles**: "Confirm role when a friend queues" now offers
+  "Chosen roles" with a Tank/Healer/DPS multi-select instead of a single role. Only
+  the roles your current spec can fill are used, so one set carries across
+  characters, an all-roles pick still confirms a DPS-only alt as DPS, and if none of
+  the ticked roles fit the spec it keeps your last used role. An existing single-role
+  setting migrates to "Chosen roles" with that role ticked.
+
+- **Edit mode is clearer**: the test-frame overlay now shows a large, centred
+  "Click to Edit", and names the frame you are pointing at in a tooltip by the
+  cursor rather than inside the box. Opening the test frames hides the Settings
+  window and shows a small movable "Close test frames" control (always at the same
+  spot); closing edit mode (its button or Escape) brings Settings back.
+
+- **Party key row shows the level**: the party-key dropdown truncates only the
+  dungeon name with a trailing "...", so the character name and "+level" stay
+  visible instead of the level being clipped off the end.
+
+- **Party key dropdown moved inside the window**: the party-key selector now sits
+  on its own row at the top of the Premade Groups Create screen, lined up with the
+  dungeon and difficulty dropdowns below it (caption on the left box's edge, selector
+  ending on the right box's edge, a solid dark band spanning between). It no longer
+  floats to the right of the window over a Raider.IO-style overlay.
+
+- **Buff reminder is dungeon-only**: the missing-buff reminder now posts only
+  inside a dungeon once the key is under way. It no longer fires out in the world
+  or in a raid, and still stays quiet while the group is buffing before the pull.
 - **Party key title fixed**: picking a party key from the create-a-group dropdown
   now reliably writes the "+level" title. Selecting the dungeon activity had been
   auto-filling the title box first, so the "+level" write was skipped.

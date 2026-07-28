@@ -135,6 +135,16 @@ end)
 
 -- ── The list the dropdown draws ────────────────────────────────────────────
 
+-- Shorten only the dungeon name, so the row stays "Name - Dungeon +Level" with the
+-- name and level always visible; a long dungeon is cut with a trailing "...". The
+-- box clips the end otherwise, hiding the level, which is the part people scan for.
+local KS_DUNGEON_MAX = 16
+local function ksShortDungeon(name)
+  if type(name) ~= "string" then return "?" end
+  if #name <= KS_DUNGEON_MAX then return name end
+  return name:sub(1, KS_DUNGEON_MAX - 3):gsub("%s+$", "") .. "..."
+end
+
 -- Every fresh key, our own included, highest level first (ties broken by name).
 -- Each row: { name, mapID, dungeon, level, label }, where label is
 -- "Name - Dungeon +Level", the shape the request asked for.
@@ -157,7 +167,7 @@ local function ksList()
 
   for _, r in ipairs(rows) do
     r.dungeon = ksDungeonName(r.mapID) or "?"
-    r.label = r.name .. " - " .. r.dungeon .. " +" .. r.level
+    r.label = r.name .. " - " .. ksShortDungeon(r.dungeon) .. " +" .. r.level
   end
   return rows
 end
@@ -206,6 +216,9 @@ local function ksApply(entry)
   -- "only if empty" write never fired; picking a key is an explicit request for
   -- that title, so set it outright. Do it again a frame later, since the panel's
   -- own post-select refresh can re-stamp the default title after we return.
+  -- Note: for a Mythic+ activity Blizzard owns the title (a prebuilt "+level"
+  -- plus the required playstyle, via C_LFGList.SetEntryTitle), so it may append the
+  -- playstyle on top of ours; that is the client's mandated format, not a bug here.
   local function setTitle()
     local nameBox = frame.Name
     if type(nameBox) == "table" and type(nameBox.SetText) == "function" then
@@ -221,52 +234,102 @@ ns.keyShareApply = ksApply
 
 -- ── The dropdown on the create panel ───────────────────────────────────────
 
+-- The two Blizzard dropdowns on the create panel we line the row up with: the
+-- dungeon ("Nexus-Point…") and the difficulty ("Mythic+"). Names per the Blizzard
+-- GroupFinder frame (the same refs ElvUI skins). Returned left-to-right by their
+-- on-screen position, so we never care which is which. nil until the panel lays out.
+local function ksRowDropdowns()
+  local frame = ksPanel()
+  if type(frame) ~= "table" then return nil end
+  local a, b = frame.GroupDropdown, frame.ActivityDropdown
+  if type(a) ~= "table" or type(b) ~= "table" then return nil end
+  if type(a.GetLeft) ~= "function" or type(b.GetLeft) ~= "function" then return nil end
+  local la, lb = a:GetLeft(), b:GetLeft()
+  if not (la and lb) then return nil end
+  if la <= lb then return a, b else return b, a end
+end
+
+-- Classic dropdown chrome carries a phantom margin: the visible box starts inside
+-- the frame's left edge and ends inside its right. These insets bring our row's
+-- edges onto the visible box edges of the dropdowns below. Tweak if a client's
+-- dropdown art differs.
+local KS_DD_INSET_L, KS_DD_INSET_R = 16, 16
+
+-- Anchor the row (backing, caption, selector) to the dungeon/difficulty dropdowns
+-- so the caption's left sits on the left box's left edge, the selector's right sits
+-- on the right box's right edge, and the backing spans exactly between them. Relies
+-- on the panel being laid out (GetLeft populated); no-ops and is retried otherwise.
+local KS_ROW_GAP, KS_ROW_H = 21, 22  -- lift above the dropdown row; selector height
+local KS_BG_PAD = 4                  -- how far the band spills past the row each side
+local function ksLayoutRow(d)
+  if not d then return false end
+  local leftDD, rightDD = ksRowDropdowns()
+  if not (leftDD and rightDD) then return false end
+  local GAP, H = KS_ROW_GAP, KS_ROW_H
+
+  -- Selector: right edge on the right box's edge, stretched to fill the column.
+  local left = leftDD:GetLeft() + KS_DD_INSET_L
+  local right = rightDD:GetRight() - KS_DD_INSET_R
+  local labelW = d.label:GetStringWidth() or 0
+  local width = (right - left) - labelW - 12
+  if width < 80 then width = 80 end
+  d:SetBoxWidth(width)
+  d:ClearAllPoints()
+  d:SetPoint("BOTTOMRIGHT", rightDD, "TOPRIGHT", -KS_DD_INSET_R, GAP)
+
+  -- Band: symmetric a few px around the selector's height, a touch wider each side.
+  d.bg:ClearAllPoints()
+  d.bg:SetPoint("BOTTOMLEFT", leftDD, "TOPLEFT", KS_DD_INSET_L - KS_BG_PAD, GAP - KS_BG_PAD)
+  d.bg:SetPoint("TOPRIGHT", rightDD, "TOPRIGHT", -KS_DD_INSET_R + KS_BG_PAD, GAP + H + KS_BG_PAD)
+
+  -- Caption: left edge on the left box's edge (with the same inner padding the box
+  -- text has), vertically centred on the band so it lines up with the selector bar.
+  d.label:ClearAllPoints()
+  d.label:SetPoint("LEFT", d.bg, "LEFT", KS_BG_PAD + 8, 0)
+  return true
+end
+
 local ksDropdown
 local ksApplying = false  -- true while our own pick drives LFGListEntryCreation_Select
 local function ksEnsureDropdown()
   if ksDropdown then return ksDropdown end
   local frame = ksPanel()
   if not (frame and type(ns.dropdownWidget) == "function") then return nil end
-  -- Parented to UIParent so the panel can't clip it, but the panel's window
-  -- (PVEFrame) draws at HIGH strata, so anything inside its footprint at the same
-  -- strata renders behind its chrome. Sit to the right of the window in open
-  -- space, at a strata that beats the window, so it's always visible and never
-  -- overlaps the panel's own fields or the tab strip below it.
+  -- Sit inside the create panel itself, its row lined up with the dungeon/difficulty
+  -- dropdowns below (see ksLayoutRow): parenting to the panel makes it draw above the
+  -- panel's chrome and hide with it, and keeps it in the window so it never overlaps a
+  -- Raider.IO-style overlay drawn to the right. A solid dark backing spans the row so
+  -- the panel's own text underneath can't bleed through; a gold caption sits at the
+  -- left box's edge; the open list overlays the fields below on its own.
   local anchorTo = _G.PVEFrame or frame
-  local W, ROWH, MAXROWS = 240, 20, 5
 
-  -- A bordered backing panel, tall enough that the list (up to MAXROWS) opens over
-  -- a solid dark frame rather than floating over the world. The label sits at its
-  -- top and the selector just under it; the open list overlays the space below.
-  local bg = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
-  bg:SetFrameStrata("FULLSCREEN_DIALOG")
-  bg:SetToplevel(true)
-  -- label row + selector + a full MAXROWS-tall list below it, plus padding.
-  bg:SetSize(W + 20, 26 + 26 + MAXROWS * ROWH + 16)
-  bg:SetPoint("TOPLEFT", anchorTo, "TOPRIGHT", 10, -40)
+  -- Opaque column behind the row, matching the field-box dark fill. Drawn one strata
+  -- below the dropdown so it masks the panel text without hiding the selector.
+  local bg = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+  bg:SetFrameStrata("MEDIUM")
   if bg.SetBackdrop then
     bg:SetBackdrop({
-      bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-      edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-      tile = true, tileSize = 16, edgeSize = 16,
-      insets = { left = 4, right = 4, top = 4, bottom = 4 },
+      bgFile = "Interface\\Buttons\\WHITE8X8",
+      edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1,
+      insets = { left = 1, right = 1, top = 1, bottom = 1 },
     })
-    bg:SetBackdropColor(0.05, 0.04, 0.03, 0.95)
+    bg:SetBackdropColor(0.04, 0.04, 0.05, 1)
     bg:SetBackdropBorderColor(0.88, 0.65, 0.31, 0.9)
   end
 
-  local label = bg:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  label:SetPoint("TOPLEFT", bg, "TOPLEFT", 12, -8)
-  label:SetText(GOLD .. "Party keys" .. ENDC)
-
-  local d = ns.dropdownWidget(bg, W)
+  local d = ns.dropdownWidget(frame, 200)
   d.placeholder = "Party keys…"
-  d:SetFrameStrata("FULLSCREEN_DIALOG")
+  d:SetFrameStrata("HIGH")
   d:SetToplevel(true)
   d:ClearAllPoints()
-  d:SetPoint("TOPLEFT", bg, "TOPLEFT", 10, -26)
-  d.label = label
+  -- Fallback spot until the panel lays out and ksLayoutRow can anchor to the boxes.
+  d:SetPoint("TOPRIGHT", anchorTo, "TOPRIGHT", -14, -30)
   d.bg = bg
+
+  local label = d:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  label:SetPoint("RIGHT", d, "LEFT", -6, 0)
+  label:SetText(GOLD .. "Party keys" .. ENDC)
+  d.label = label
   -- Selecting a key calls LFGListEntryCreation_Select, whose own hook would fire a
   -- refresh and reset the box back to the placeholder; a flag suppresses that so
   -- the chosen row stays shown.
@@ -283,7 +346,7 @@ end
 local function ksRefreshDropdown()
   local d = ksEnsureDropdown()
   if not d then return end
-  if not cfg("keyshare") then d:Hide(); if d.bg then d.bg:Hide() end return end
+  if not cfg("keyshare") then d:Hide(); if d.label then d.label:Hide() end; if d.bg then d.bg:Hide() end return end
   -- Our own pick is what re-entered here; leave the chosen row on the box.
   if ksApplying then return end
   local list = ksList()
@@ -299,7 +362,15 @@ local function ksRefreshDropdown()
     d.text:SetText(WHITE .. "Pick a party key…" .. ENDC)
   end
   if d.bg then d.bg:Show() end
+  if d.label then d.label:Show() end
   d:Show()
+
+  -- Line the row up with the dungeon/difficulty boxes. On the first open the panel
+  -- may not have positioned them yet (GetLeft nil), so retry a frame later; once it
+  -- takes, the anchors are relative and hold on their own.
+  if not ksLayoutRow(d) and C_Timer and type(C_Timer.After) == "function" then
+    C_Timer.After(0, function() pcall(ksLayoutRow, d) end)
+  end
 end
 ns.keyShareRefresh = ksRefreshDropdown
 
@@ -309,6 +380,7 @@ local ksPanelHooked = false
 local function ksHideDropdown()
   if ksDropdown then
     ksDropdown:Hide()
+    if ksDropdown.label then ksDropdown.label:Hide() end
     if ksDropdown.bg then ksDropdown.bg:Hide() end
     if ksDropdown.close then ksDropdown.close() end
   end

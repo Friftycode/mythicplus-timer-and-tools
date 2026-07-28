@@ -1224,6 +1224,7 @@ local function buffChat()
   return table.concat(parts, "\n")
 end
 Mock.state.inGroup = true
+Mock.state.challengeActive = true  -- reminders only fire in a dungeon with the key live
 Mock.auras = {
   player = { 21562, 1459 },
   party1 = { 21562 },          -- Healer, missing Arcane Intellect
@@ -1285,6 +1286,20 @@ Mock.sentChat = {}
 Mock.advance(25, 1)
 ok(#Mock.sentChat == 0, "no reminders while the feature is off")
 ns.setCfg("buffreminder", true)
+
+-- Outside a running key nothing is announced: in a dungeon before the key starts,
+-- and out in the open world, a missing buff is held rather than posted.
+Mock.auras.party1 = { 21562 }  -- Healer missing Arcane Intellect again
+Mock.state.challengeActive = false
+Mock.sentChat = {}
+Mock.advance(25, 1)
+ok(#Mock.sentChat == 0, "no reminder in a dungeon before the key is under way")
+Mock.state.inInstance = false
+Mock.sentChat = {}
+Mock.advance(25, 1)
+ok(#Mock.sentChat == 0, "no reminder out in the open world")
+Mock.state.inInstance = true
+Mock.state.challengeActive = false
 Mock.state.inGroup = false
 
 -- Feature 2: the Note window, keyed by the Encounter Journal instance id (500)
@@ -1584,7 +1599,8 @@ Mock.fire("CHAT_MSG_ADDON", "MPTTKey", "K:376:15", "PARTY", "Frifty-Realm")
 local kl = ns.keyShareList()
 ok(#kl == 2, "the list holds our key and the peer's")
 ok(kl[1].name == "Frifty" and kl[1].level == 15, "the higher peer key sorts above our own")
-ok(kl[1].label == "Frifty - The Necrotic Wake +15", "a row reads 'name - dungeon +level'")
+-- The dungeon is truncated with "..." so the name and "+level" stay visible.
+ok(kl[1].label == "Frifty - The Necrotic... +15", "a row reads 'name - dungeon +level', dungeon truncated")
 ok(kl[2].name ~= "Frifty" and kl[2].level == 12, "our own key is the other row")
 
 -- Picking a key fills in that dungeon's activity and the "+level" title.

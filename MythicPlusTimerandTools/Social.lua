@@ -246,16 +246,21 @@ local function setRoleChecked(role, want)
   if (checked and true or false) ~= want then pcall(cb.Click, cb) end
 end
 
--- Force the popup to the single chosen role when the current spec can fill it.
--- Returns true once it has set the roles; false to leave the popup exactly as
--- the client left it (the last used role), which is also the fallback when the
--- chosen role is not one this spec offers.
-local function applyPreferredRole(mode)
-  if not ROLE_BUTTON[mode] then return false end
-  if not roleAvailable(mode) then return false end
-  setRoleChecked(mode, true)                 -- ensure the chosen role first
+-- Force the popup to the chosen roles, but only the ones the current spec can fill,
+-- so a set that lists a role this character cannot play just drops it (an alt that
+-- can only DPS confirms as DPS even when Tank and Healer are ticked too). Returns
+-- true once it has set the roles; false to leave the popup exactly as the client
+-- left it (the last used role), which is the fallback when none of the chosen roles
+-- fit this spec, so we never confirm with an empty, invalid role set.
+local function applyPreferredRoles(wanted)
+  if type(wanted) ~= "table" then return false end
+  local anyFits = false
   for role in pairs(ROLE_BUTTON) do
-    if role ~= mode then setRoleChecked(role, false) end
+    if wanted[role] and roleAvailable(role) then anyFits = true; break end
+  end
+  if not anyFits then return false end
+  for role in pairs(ROLE_BUTTON) do
+    setRoleChecked(role, (wanted[role] and roleAvailable(role)) and true or false)
   end
   return true
 end
@@ -276,9 +281,9 @@ local function installRoleConfirm()
       end
     end
     if leader and ns.friendCheck(leader, leaderGUID) then
-      -- "last" leaves the popup as the client pre-filled it; a specific role is
-      -- applied only when the spec can fill it. Either way, then confirm.
-      pcall(applyPreferredRole, mode)
+      -- "last" leaves the popup as the client pre-filled it; "roles" sets the ticked
+      -- roles the spec can fill. Either way, then confirm.
+      if mode == "roles" then pcall(applyPreferredRoles, cfg("confirmqueueroles")) end
       self:Click()
     end
   end)

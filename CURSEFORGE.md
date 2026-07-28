@@ -16,9 +16,9 @@ A Mythic+ timer, plus the small stuff that usually means extra work or a second 
 - **Party keys:** Anyone in the group running the addon shares their key, so the Premade Groups Create screen gets a dropdown of everyone's keys. Pick one and it fills in the dungeon and a "+level" title.
 - **!keys:** Type "!keys" to link the keystone you're carrying. Anyone in the group can use it.
 - **Group Finder invites:** When you get invited to a group it shows the dungeon, leader, group note, and a teleport button if you've unlocked it.
-- **Missing buff reminder:** Warns you when someone is missing their class buff, only for classes actually in the group. Inside a Mythic+ dungeon it waits until the key starts, so nobody is nagged while the group is still buffing before the run. Choose party chat, a popup, or both, and configure which buffs to check and how often.
+- **Missing buff reminder:** Warns you when someone is missing their class buff, only for classes actually in the group. It only fires inside a dungeon once the key is under way, never out in the world or a raid, and not while the group is still buffing before the run. Choose party chat, a popup, or both, and configure which buffs to check and how often.
 - **Bloodlust alert:** Shows a popup when someone types bl, hero, lust, drums, etc.
-- **Friend invites:** Auto-accepts a party invite from a friend, and confirms the role check when a friend queues you. Confirm as your last used role, or pin it to Tank, Healer, or Damage (a role your spec cannot fill is skipped).
+- **Friend invites:** Auto-accepts a party invite from a friend, and confirms the role check when a friend queues you. Confirm as your last used role, or as a chosen set of Tank/Healer/DPS roles (only the ones your current spec can fill, so one set works across your characters).
 - **Invite on whisper:** Invites anyone who whispers your keyword (default "inv"). Friends only if you want.
 - **Block invites and duels:** Turns away party invites, join requests, and duels from anyone who isn't a friend. Guild members count as friends; communities are optional.
 
@@ -30,7 +30,7 @@ A Mythic+ timer, plus the small stuff that usually means extra work or a second 
 - **Quest givers:** Automatically accepts and turns in quests, everywhere or only in dungeons.
 - **Chat:** Makes links click to copy, and adds a Copy button to every chat tab.
 - **Minimap button:** Opens the options and toggles Let me focus. Drag it to move it, or hide it completely.
-- **Test mode:** Shows all movable frames at once, each with example content and a light-blue overlay. Drag a frame to move it, resize it from its grip, or click it to jump straight to its settings. Escape closes it.
+- **Test mode:** Shows all movable frames at once, each with example content and a light-blue "Click to Edit" overlay; the frame you point at is named in a tooltip by the cursor. Drag a frame to move it, resize it from its grip, or click it to jump straight to its settings. It hides the Settings window and gives you a small "Close test frames" control; that button or Escape closes it and brings Settings back.
 
 ### **Commands**
 

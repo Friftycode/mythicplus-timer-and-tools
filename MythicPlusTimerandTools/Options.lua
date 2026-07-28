@@ -85,6 +85,7 @@ local function tint(tex, c) tex:SetColorTexture(c[1], c[2], c[3], c[4]) end
 
 -- Declared before the closures below so they capture these upvalues, not globals.
 local previewShown = false
+local settingsWasOpen = false  -- reopen Settings on exit only if we hid it on enter
 local setPreviews  -- forward declaration: the Esc catcher and overlay call it
 
 -- Lays the overlay over `frame` (once, then reused). Drag forwards to the
@@ -106,17 +107,27 @@ local function attachEditOverlay(frame, preview)
     o:RegisterForDrag("LeftButton")
     o.bg = o:CreateTexture(nil, "BACKGROUND")
     o.bg:SetAllPoints()
-    o.title = o:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    o.title:SetPoint("CENTER", 0, 7)
-    o.hint = o:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    o.hint:SetPoint("CENTER", 0, -12)
-    o.hint:SetText(GOLD .. "Click to edit" .. ENDC)
-    o.hint:Hide()
+    o.title = o:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    o.title:SetPoint("CENTER")
+    o.title:SetJustifyH("CENTER")
+    o.title:SetText(WHITE .. "Click to Edit" .. ENDC)
+    o.title:Hide()
+    -- "Click to Edit" shows only while hovered; the frame's own name rides the
+    -- cursor in a tooltip rather than crowding the box, so even a small frame stays
+    -- readable.
     o:SetScript("OnEnter", function(self)
-      tint(self.bg, TINT_HOVER); self.hint:Show()
+      tint(self.bg, TINT_HOVER)
+      self.title:Show()
+      if GameTooltip and self.frameName then
+        GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
+        GameTooltip:SetText(self.frameName, 1, 0.82, 0)
+        GameTooltip:Show()
+      end
     end)
     o:SetScript("OnLeave", function(self)
-      tint(self.bg, TINT); self.hint:Hide()
+      tint(self.bg, TINT)
+      self.title:Hide()
+      if GameTooltip then GameTooltip:Hide() end
     end)
     -- Forward drags to the frame's own drag handlers, so StartMoving and the
     -- feature's savePosition both run just as they would without the overlay.
@@ -153,9 +164,9 @@ local function attachEditOverlay(frame, preview)
     end)
   end
   o.target = preview.target
-  o.title:SetText(GOLD .. titleCase(preview.name) .. ENDC)
+  o.frameName = titleCase(preview.name)
   tint(o.bg, TINT)
-  o.hint:Hide()
+  o.title:Hide()
   o:Show()
 end
 
@@ -178,9 +189,58 @@ local function ensureEscCatcher()
   end)
 end
 
+-- The Settings window would sit over the test frames, so hide it while editing and
+-- put it back afterwards. Retail's frame is SettingsPanel; guard for older clients.
+local function hideSettingsWindow()
+  local p = _G.SettingsPanel
+  if not (p and type(p.IsShown) == "function" and p:IsShown()) then return false end
+  if type(HideUIPanel) == "function" then pcall(HideUIPanel, p) else pcall(p.Hide, p) end
+  return true
+end
+
+-- A small control window shown alongside the test frames, with the one button that
+-- ends edit mode. Movable, but reset to the same spot every time it opens so it is
+-- always where you left it in muscle memory.
+local controlPopup
+local function ensureControlPopup()
+  if controlPopup then return controlPopup end
+  local f = CreateFrame("Frame", "MythicPlusTimerEditModeControls", UIParent, "BackdropTemplate")
+  f:SetSize(230, 78)
+  f:SetFrameStrata("DIALOG")
+  f:SetToplevel(true)
+  f:EnableMouse(true)
+  f:SetMovable(true)
+  f:RegisterForDrag("LeftButton")
+  f:SetScript("OnDragStart", function(self) self:StartMoving() end)
+  f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+  if f.SetBackdrop then
+    f:SetBackdrop({
+      bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+      edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+      tile = true, tileSize = 32, edgeSize = 20,
+      insets = { left = 5, right = 5, top = 5, bottom = 5 },
+    })
+  end
+
+  local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  title:SetPoint("TOP", f, "TOP", 0, -12)
+  title:SetText(GOLD .. "Edit Mode" .. ENDC)
+
+  local btn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+  btn:SetSize(180, 24)
+  btn:SetPoint("BOTTOM", f, "BOTTOM", 0, 12)
+  btn:SetText("Close test frames")
+  btn:SetScript("OnClick", function() setPreviews(false) end)
+
+  controlPopup = f
+  return f
+end
+
 setPreviews = function(on)
   if on == previewShown then return end
   previewShown = on
+  -- Get the Settings window out of the way before the frames come up.
+  if on then settingsWasOpen = hideSettingsWindow() end
   for _, p in ipairs(ns.previews) do
     pcall(on and p.show or p.hide)
     local ok, frame = false, nil
@@ -193,6 +253,17 @@ setPreviews = function(on)
   end
   ensureEscCatcher()
   if on then escCatcher:Show() else escCatcher:Hide() end
+
+  local pop = ensureControlPopup()
+  if on then
+    pop:ClearAllPoints()
+    pop:SetPoint("TOP", UIParent, "TOP", 0, -140)
+    pop:Show()
+  else
+    pop:Hide()
+    -- Bring Settings back only if we were the one who closed it.
+    if settingsWasOpen then settingsWasOpen = false; pcall(ns.openSettings) end
+  end
 end
 
 local function togglePreviews() setPreviews(not previewShown) end

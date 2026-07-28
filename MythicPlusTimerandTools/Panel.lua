@@ -295,6 +295,9 @@ local function dropdownWidget(parent, width)
   function d:SetChoices(list) d.choices = list or {} end
   function d:SetValue(v) d.value = v; d.text:SetText(labelFor(v)) end
   function d:GetValue() return d.value end
+  -- Resize the box and its open list together, so a dropdown stretched to fit a
+  -- host panel keeps the menu the same width as the button.
+  function d:SetBoxWidth(w) if w and w > 0 then d:SetWidth(w); menu:SetWidth(w) end end
   return d
 end
 
@@ -311,6 +314,43 @@ local function choiceControl(parent, label, get, set, choices, tooltip)
   d.onSelect = function(v) set(v) end
   c.button = d
   c.refresh = function() d:SetValue(get()) end
+  c.refresh()
+  return c
+end
+
+-- Several independent on/off choices on one row (a set of roles), stored as a set
+-- table { value = true, ... }. Each toggle writes a fresh table, so the saved value
+-- is never a shared reference to another profile's set or to the default.
+local function multichoiceControl(parent, label, get, set, choices, tooltip)
+  local c = labelledRow(parent, label, tooltip)
+  c.toggles = {}
+  local x = CONTROL_X
+  for _, ch in ipairs(choices) do
+    local cb = CreateFrame("CheckButton", nil, c)
+    cb:SetSize(20, 20)
+    cb:SetPoint("LEFT", c, "LEFT", x, 0)
+    cb:SetNormalTexture("Interface\\Buttons\\UI-CheckBox-Up")
+    cb:SetPushedTexture("Interface\\Buttons\\UI-CheckBox-Down")
+    cb:SetHighlightTexture("Interface\\Buttons\\UI-CheckBox-Highlight")
+    cb:SetCheckedTexture("Interface\\Buttons\\UI-CheckBox-Check")
+    local t = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    t:SetPoint("LEFT", cb, "RIGHT", 3, 0)
+    t:SetText(ch.label)
+    cb.value = ch.value
+    cb:SetScript("OnClick", function(self)
+      local cur = get() or {}
+      local nextSet = {}
+      for _, o in ipairs(choices) do if cur[o.value] then nextSet[o.value] = true end end
+      nextSet[self.value] = self:GetChecked() and true or nil
+      set(nextSet)
+    end)
+    c.toggles[ch.value] = cb
+    x = x + 20 + 3 + (t:GetStringWidth() or 30) + 10
+  end
+  c.refresh = function()
+    local cur = get() or {}
+    for value, cb in pairs(c.toggles) do cb:SetChecked(cur[value] and true or false) end
+  end
   c.refresh()
   return c
 end
@@ -879,6 +919,8 @@ local function buildSettings()
         control = numberControl(page, o.label, get, set, o.min or 0, o.max or 100, o.tooltip)
       elseif o.type == "choice" then
         control = choiceControl(page, o.label, get, set, o.choices or {}, o.tooltip)
+      elseif o.type == "multichoice" then
+        control = multichoiceControl(page, o.label, get, set, o.choices or {}, o.tooltip)
       elseif o.type == "text" then
         control = textControl(page, o.label, get, set, o.default, o.tooltip)
       else

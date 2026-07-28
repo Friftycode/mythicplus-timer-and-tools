@@ -53,9 +53,6 @@ local function brPresentClasses(units)
   return present
 end
 
--- Inside a Mythic+ dungeon, hold every reminder until the key is actually under
--- way, so nothing is posted while the group is still buffing before the run
--- starts. Elsewhere (raids, an open-world group) there is nothing to wait for.
 local function brInPartyDungeon()
   if type(IsInInstance) ~= "function" then return false end
   local ok, inside, itype = pcall(IsInInstance)
@@ -68,9 +65,11 @@ local function brChallengeActive()
   return ok and active and true or false
 end
 
+-- Only remind inside a dungeon once the key is under way. Never out in the world,
+-- in a raid, or before the pull: the reminder is for a running Mythic+, so nothing
+-- is posted while the group is buffing at the start or just grouped up questing.
 local function brDeliveryAllowed()
-  if brInPartyDungeon() and not brChallengeActive() then return false end
-  return true
+  return brInPartyDungeon() and brChallengeActive()
 end
 
 -- Whether a unit currently has the given buff. On any client that can't answer

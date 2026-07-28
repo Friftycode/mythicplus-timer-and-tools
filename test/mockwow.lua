@@ -160,7 +160,7 @@ C_Timer = { After = function(delay, fn) table.insert(Mock.timers, { at = Mock.no
 
 Mock.state = {
   mapID = 375, level = 10, affixes = { 9, 6, 3 }, timeLimit = 1800,
-  inInstance = true, deathCount = 0, dead = {},
+  inInstance = true, challengeActive = false, deathCount = 0, dead = {},
   criteria = {
     { description = "Enemy Forces", isWeightedProgress = true, quantityString = "45 / 260", totalQuantity = 260, completed = false },
     { description = "Bloodtwisted Overseer", isWeightedProgress = false, completed = false },
@@ -328,6 +328,13 @@ function GetInstanceInfo()
   end
   return "Elwynn", "none", 0, "", 0, 0, false, 0
 end
+
+-- The buff reminder gates delivery on being in a dungeon with the key under way.
+function IsInInstance()
+  if Mock.state.inInstance then return true, "party" end
+  return false, "none"
+end
+C_ChallengeMode.IsChallengeModeActive = function() return Mock.state.challengeActive and true or false end
 
 function GetWorldElapsedTimers() return { 1 } end
 function GetWorldElapsedTime(_) return nil, 0, 1 end
