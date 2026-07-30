@@ -88,14 +88,16 @@ function ensureGuildFrame()
   end
   if f.SetBackdrop then
     -- Same warm near-black + armory-gold border the M+ overlay uses, so the
-    -- panel reads as part of the same addon.
+    -- panel reads as part of the same addon. Fully opaque here (unlike the
+    -- floating overlays): this panel sits inside ChallengesFrame, so anything
+    -- another addon parents there must be hidden behind it, not bleed through.
     f:SetBackdrop({
       bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
       edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
       tile = true, tileSize = 16, edgeSize = 16,
       insets = { left = 4, right = 4, top = 4, bottom = 4 },
     })
-    f:SetBackdropColor(0.05, 0.04, 0.03, 0.95)
+    f:SetBackdropColor(0.05, 0.04, 0.03, 1)
     f:SetBackdropBorderColor(0.88, 0.65, 0.31, 0.9)
   end
 

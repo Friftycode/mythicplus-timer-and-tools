@@ -274,6 +274,10 @@ Kept here until the next tagged release picks it up.
 
 ### Unreleased
 
+- **Guild keys panel is fully opaque**: the "Guild keys this week" box inside the
+  Mythic+ window no longer lets anything another addon draws in the same spot bleed
+  through it. Its background is now solid rather than slightly see-through.
+
 - **Confirm as multiple roles**: "Confirm role when a friend queues" now offers
   "Chosen roles" with a Tank/Healer/DPS multi-select instead of a single role. Only
   the roles your current spec can fill are used, so one set carries across
