@@ -91,7 +91,7 @@ local DEFAULTS = {
   -- note text itself is account-wide (MythicPlusTimerNotes), not a profile value.
   -- Off by default: a note window appearing unasked would surprise people.
   notepad = false,
-  notepadmode = "always",    -- "always" | "hiddenuntilstart" | "hiddenrun"
+  notepadmode = "indungeon", -- "everywhere" | "indungeon" | "hideatstart"
   notepadlocked = false,
   notepadpoint = nil,        -- { point, x, y } of the note window
   notebossauto = true,       -- follow the fight: open a boss's tab near/at it, else the dungeon tab
@@ -179,7 +179,7 @@ ns.OPTIONS = {
   { key = "buffshaman", group = "Alerts", section = "Which buffs", label = "Skyfury (Shaman)", tooltip = "Track Skyfury when a Shaman is in the group." },
   { key = "buffevoker", group = "Alerts", section = "Which buffs", label = "Blessing of the Bronze (Evoker)", tooltip = "Track Blessing of the Bronze when an Evoker is in the group." },
   { key = "notepad", group = "Note", section = "The note window", label = "Show the note window", tooltip = "A note window that appears in a dungeon, with a general dungeon note plus a note per boss. Each dungeon keeps its own notes, and they survive a reload or wipe." },
-  { key = "notepadmode", type = "choice", choices = { { value = "always", label = "Always visible" }, { value = "hiddenuntilstart", label = "Until key starts" }, { value = "hiddenrun", label = "Hidden during key" } }, group = "Note", section = "The note window", label = "When to show it", tooltip = "Always while in the dungeon, only once a keystone has started, or hidden for the whole keystone run." },
+  { key = "notepadmode", type = "choice", choices = { { value = "everywhere", label = "Always" }, { value = "indungeon", label = "Just inside dungeon" }, { value = "hideatstart", label = "Hide at key start" } }, group = "Note", section = "The note window", label = "When to show it", tooltip = "Shown everywhere the note is turned on; only while you are inside a dungeon; or inside the dungeon until a keystone starts and then hidden for the run." },
   { key = "notepadlocked", group = "Note", section = "The note window", label = "Lock the note window", tooltip = "Stop the note window from being dragged. You can also lock it from the window itself." },
   { key = "notebossauto", group = "Note", section = "The note window", label = "Follow the fight", tooltip = "Automatically open a boss's tab as you get near it or pull it, and go back to the Dungeon tab once the boss is down or you leave. Turn off to switch tabs yourself." },
   { key = "autorepair", group = "Automation", section = "At a merchant", label = "Auto repair", tooltip = "Repair your gear automatically when you talk to a merchant that can repair." },
@@ -282,12 +282,22 @@ local function cleanProfile(src)
   -- Choice keys accept only their known values; anything else falls to default.
   local CHOICES = {
     buffdelivery = { chat = true, popup = true, both = true },
-    notepadmode = { always = true, hiddenuntilstart = true, hiddenrun = true },
+    notepadmode = { everywhere = true, indungeon = true, hideatstart = true },
     autoquestmode = { always = true, never = true, dungeon = true },
     groupplaystyle = { off = true, ["1"] = true, ["2"] = true, ["3"] = true, ["4"] = true },
     defaultdifficulty = { off = true, normal = true, heroic = true, mythic = true, mythicplus = true },
     confirmqueuerole = { off = true, last = true, roles = true },
   }
+  -- notepadmode's options were reworked into show-everywhere / only-inside-a-
+  -- dungeon / hide-once-the-key-starts. Carry the old (and interim) value names
+  -- over so an existing setting keeps a sensible meaning.
+  local NOTEPADMODE_MIGRATE = {
+    always = "indungeon", hiddenuntilstart = "indungeon", duringkey = "indungeon",
+    hiddenrun = "hideatstart", untilstart = "hideatstart",
+  }
+  if NOTEPADMODE_MIGRATE[clean.notepadmode] then
+    clean.notepadmode = NOTEPADMODE_MIGRATE[clean.notepadmode]
+  end
   -- confirmqueuerole was once a checkbox: carry the old boolean over to the
   -- matching choice so an existing setting is not silently reset.
   if clean.confirmqueuerole == true then clean.confirmqueuerole = "last"

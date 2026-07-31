@@ -184,12 +184,15 @@ local function npKeyActiveNow()
 end
 
 local function npShouldShow()
-  if not cfg("notepad") or not npInDungeon() then return false end
+  if not cfg("notepad") then return false end
+  -- "everywhere": up wherever the note is on, in or out of a dungeon. The other
+  -- two are dungeon-only: "indungeon" the whole visit, "hideatstart" from
+  -- entering until a keystone starts, then hidden for the run.
   local mode = cfg("notepadmode")
-  if mode == "hiddenrun" then
+  if mode == "everywhere" then return true end
+  if not npInDungeon() then return false end
+  if mode == "hideatstart" then
     return not (npKeyStarted or npKeyActiveNow())
-  elseif mode == "hiddenuntilstart" then
-    return npKeyStarted or npKeyActiveNow()
   end
   return true
 end
@@ -775,9 +778,19 @@ local function npApply()
   end
   local f = ensureNpFrame()
   local key = npCurrentDungeonKey()
-  if key and key ~= npCurrentID then
+  -- The map and Encounter Journal APIs settle a moment after zone-in, so the
+  -- first pass on entering can resolve the dungeon but not its bosses yet,
+  -- leaving only the Dungeon tab. Rebuild when the dungeon changes, and also
+  -- once the boss tabs become available, so they fill in on entering rather
+  -- than only when a keystone starts (the next thing that re-applies).
+  local haveBosses = false
+  for _, s in ipairs(f.sections or {}) do
+    if s.key ~= "dungeon" then haveBosses = true break end
+  end
+  local bossesNow = key and #npBossesFor(key) > 0
+  if key and (key ~= npCurrentID or (bossesNow and not haveBosses)) then
+    if key ~= npCurrentID then npSection = "dungeon" end
     npCurrentID = key
-    npSection = "dungeon"
     npBuildSections(f)
     f.loadSection()
   end
@@ -894,6 +907,13 @@ npEvents:SetScript("OnEvent", function(_, event, arg1)
     npCurrentID = nil
   end
   pcall(npApply)
+  if event == "PLAYER_ENTERING_WORLD" then
+    -- Re-apply after the instance and journal APIs settle, so the boss tabs
+    -- appear on entering the dungeon and not only once a key has started.
+    C_Timer.After(1, function() pcall(npApply) end)
+    C_Timer.After(3, function() pcall(npApply) end)
+    C_Timer.After(6, function() pcall(npApply) end)
+  end
 end)
 
 ns.onOptionChanged("notepad", function() pcall(npApply) end)

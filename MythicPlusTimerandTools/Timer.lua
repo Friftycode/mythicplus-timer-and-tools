@@ -594,7 +594,16 @@ function mpRender()
   -- The whole clock block is one thing to hide: the countdown alone would leave
   -- the elapsed row, the bar and the upgrade windows all still saying the time.
   local timeTop = y
+  -- Deaths add to the scored clock (Challenger's Burden), so the time that
+  -- decides whether the key is still beatable is run time plus the death
+  -- penalty, not wall time. The countdown, the bar and the +2/+3 windows all
+  -- work off this scored time so they run out exactly when the key does. On the
+  -- frozen completion screen mpElapsedSeconds is already Blizzard's final,
+  -- penalty-inclusive time, so it must not be added to twice.
   local elapsed = mpElapsedSeconds()
+  if not mp.frozenElapsed then
+    elapsed = elapsed + mpDeathPenaltySeconds() * (mp.deathTotal or 0)
+  end
   if mpFocusHidden("focushidetime") then
     f.timeBar:Hide()
     cell(GREY .. "Hidden" .. ENDC, MP_PAD, full, "CENTER", "GameFontNormalLarge")

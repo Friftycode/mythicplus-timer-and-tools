@@ -170,6 +170,19 @@ r = Mock.rendered(overlay())
 has(r, "Bosses", "the blocks come back when the toggles are turned on again")
 has(r, "Enemy forces", "enemy forces is back too")
 
+-- ── Scored clock counts the death penalty ─────────────────────────────────
+-- Deaths add to the scored clock (Challenger's Burden), so the countdown and
+-- the upgrade windows must run off run time plus the penalty. Pile on enough
+-- deaths that the penalty alone blows the timer: the +2 window has to close even
+-- though wall time is still well under the limit (a wall-clock-only timer would
+-- wrongly keep it open).
+Mock.state.deathCount = 200
+Mock.fire("CHALLENGE_MODE_DEATH_COUNT_UPDATED")
+Mock.advance(1)
+r = Mock.rendered(overlay())
+has(r, "200 total", "the death total climbs")
+has(r, "+2 missed", "the death penalty closes the +2 window while wall time still has room")
+
 -- ── Completion ────────────────────────────────────────────────────────────
 
 Mock.fire("CHALLENGE_MODE_COMPLETED")
@@ -916,7 +929,7 @@ ok(minibtn():IsShown(), "turning the setting back on brings the button back")
 -- A config from before profiles kept its options at the top level; it must fold
 -- into a cleaned Default profile rather than being thrown away.
 
-MythicPlusTimerConfig = { mythicplustimer = "yes please", mpscale = 99, bogus = 1, mppoint = { point = "TOP", x = 1, y = 2 } }
+MythicPlusTimerConfig = { mythicplustimer = "yes please", mpscale = 99, bogus = 1, notepadmode = "hiddenrun", mppoint = { point = "TOP", x = 1, y = 2 } }
 MythicPlusTimerRun = "not a table"
 Mock.fire("PLAYER_LOGIN")
 local migrated = MythicPlusTimerConfig.profiles and MythicPlusTimerConfig.profiles.Default
@@ -925,6 +938,7 @@ ok(migrated.mythicplustimer == nil, "a wrong-typed config value is discarded")
 ok(migrated.bogus == nil, "an unknown config key is dropped")
 ok(migrated.mpscale == 2, "an out-of-range scale is clamped to the 0.6-2.0 range")
 ok(migrated.mppoint ~= nil, "a well-formed saved position survives")
+ok(migrated.notepadmode == "hideatstart", "the old 'hidden during key' note mode migrates to 'hide at key start'")
 ok(MythicPlusTimerRun == nil, "a garbage run record is thrown away")
 
 -- ── Profiles ──────────────────────────────────────────────────────────────
@@ -1305,12 +1319,12 @@ Mock.state.inGroup = false
 -- Feature 2: the Note window, keyed by the Encounter Journal instance id (500)
 -- so it shares its store with the prepare-ahead editor.
 ns.setCfg("notepad", true)
-ns.setCfg("notepadmode", "always")
+ns.setCfg("notepadmode", "indungeon")
 Mock.state.inEncounter = false
 Mock.state.ejInstance = 500
 Mock.fire("PLAYER_ENTERING_WORLD"); Mock.runTimers()
 local note = _G.MythicPlusTimerNotepad
-ok(note ~= nil and note:IsShown(), "the note window shows in a dungeon on the 'always' mode")
+ok(note ~= nil and note:IsShown(), "the note window shows in a dungeon on the 'just inside dungeon' mode")
 
 -- Editing is a mode: click to edit, click away (commit) to save and re-render.
 local function editNote(text)
@@ -1443,12 +1457,19 @@ noteEditor.edit:SetText("edited from settings")
 noteEditor.edit.__scripts.OnTextChanged(noteEditor.edit)
 ok(ns.noteGet(501, "dungeon") == "edited from settings", "editing in settings writes the shared note")
 
--- Hidden-during-key mode hides it while a keystone is live (the mock always has one).
+-- "Hide at key start" hides it once a keystone is live (the mock always has one).
 Mock.fire("PLAYER_ENTERING_WORLD"); Mock.runTimers()
-ns.setCfg("notepadmode", "hiddenrun")
+ns.setCfg("notepadmode", "hideatstart")
 ns.optionChanged.notepadmode()
-ok(not note:IsShown(), "the note window is hidden for the whole run on 'hidden during key'")
-ns.setCfg("notepadmode", "always")
+ok(not note:IsShown(), "the note window is hidden once the key starts on 'hide at key start'")
+
+-- "Always" (everywhere) keeps the note up even out in the open world.
+ns.setCfg("notepadmode", "everywhere")
+Mock.state.inInstance = false
+Mock.fire("PLAYER_ENTERING_WORLD"); Mock.runTimers()
+ok(note:IsShown(), "the note window stays up out of a dungeon on 'always'")
+Mock.state.inInstance = true
+ns.setCfg("notepadmode", "indungeon")
 ns.optionChanged.notepadmode()
 
 -- Feature 3a: auto repair. Personal gold first when no guild funds.

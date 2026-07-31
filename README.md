@@ -119,7 +119,7 @@ out under horizontal tabs, and **Profiles**.
 | Alerts | Remind about missing party buffs | on | Flag a class buff missing from a member (only for classes in the group); delivery, wait, cooldown, and per-class tracking are configurable |
 | Display | Show affixes / enemy forces / bosses / deaths | on | Drop any of these blocks from the overlay |
 | Display | Show +2/+3 tick marks | on | Thin white ticks on the time bar at the upgrade windows |
-| Note | Show the note window | on | A per-dungeon note window (dungeon note + a note per boss); choose always / until key starts / hidden during the run. The tab also hosts a prepare-ahead editor |
+| Note | Show the note window | on | A per-dungeon note window (dungeon note + a note per boss); choose always, just inside a dungeon, or hidden once the key starts. The tab also hosts a prepare-ahead editor |
 | Note | Follow the fight | on | Auto-open a boss's tab as you near or pull it, and return to the Dungeon tab afterwards |
 | Automation | Auto repair | on | Repair at a merchant, guild funds first when allowed, then your gold |
 | Automation | Auto sell junk | off | Sell grey (junk) items at a merchant |
@@ -273,6 +273,25 @@ One file per feature. The `.toc` is the load order and the dependency order:
 Kept here until the next tagged release picks it up.
 
 ### Unreleased
+
+- **Timer counts the death penalty**: deaths add to the scored clock (Challenger's
+  Burden), so the big countdown, the time bar, and the +2/+3 windows now work off
+  run time plus the death penalty instead of wall time alone. The clock now runs
+  out exactly when the key stops being timeable, rather than still showing time
+  left after a death-heavy run has already blown the timer. The frozen completion
+  screen is unchanged (it already uses Blizzard's final time).
+
+- **Boss note tabs show on entering the dungeon**: the per-boss tabs used to
+  appear only once the keystone started, because the map and journal data isn't
+  ready the instant you zone in. The note now re-checks for a few seconds after
+  entering, so its dungeon and boss tabs are there straight away.
+
+- **Reworked "When to show it" for the note**: three clearer choices - "Always"
+  (shown everywhere the note is on, in or out of a dungeon), "Just inside dungeon"
+  (only while you are inside a dungeon), and "Hide at key start" (shown from
+  entering the dungeon, then hidden once the key starts). Existing settings carry
+  over: the old always-in-dungeon becomes "Just inside dungeon" and the old
+  hide-during-the-run becomes "Hide at key start".
 
 - **Guild keys panel is fully opaque**: the "Guild keys this week" box inside the
   Mythic+ window no longer lets anything another addon draws in the same spot bleed
