@@ -9,10 +9,10 @@ name: keep-alive release
 # for the current patch. This does exactly that.
 #
 # Cadence: the schedule fires daily, but the `gate` job only lets a release
-# through when 30+ days have passed since the last commit. Any commit you make
+# through when 5+ days have passed since the last commit. Any commit you make
 # (or a release this workflow cuts, which commits the version bump) resets that
-# 30-day clock, so releases happen only when the repo has otherwise been idle.
-# The 30-day keep-alive commit also keeps the schedule itself alive (GitHub
+# 5-day clock, so releases happen only when the repo has otherwise been idle.
+# The keep-alive commit also keeps the schedule itself alive (GitHub
 # suspends cron on repos with 60 days of no activity).
 #
 # Delivery is the BigWigsMods packager step: it builds the zip and uploads it to
@@ -37,7 +37,7 @@ concurrency:
 
 jobs:
   # Decides whether a release is due. A manual run always passes; a scheduled run
-  # passes only when the last commit is at least 30 days old.
+  # passes only when the last commit is at least 5 days old.
   gate:
     runs-on: ubuntu-latest
     outputs:
@@ -57,8 +57,8 @@ jobs:
           NOW=$(date -u +%s)
           DAYS=$(( (NOW - LAST) / 86400 ))
           echo "Days since last commit: $DAYS"
-          if [ "$DAYS" -ge 30 ]; then
-            echo "Idle 30+ days: cutting a keep-alive release."
+          if [ "$DAYS" -ge 5 ]; then
+            echo "Idle 5+ days: cutting a keep-alive release."
             echo "go=true" >> "$GITHUB_OUTPUT"
           else
             echo "Recent activity: nothing to do."
