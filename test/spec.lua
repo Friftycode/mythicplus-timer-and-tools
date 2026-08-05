@@ -988,25 +988,6 @@ ok(dummyThumb.h == 18, "a mostly-overflowing short box gets the minimum thumb, n
 ns.sizeScrollThumb(dummyThumb, 400, 700)
 ok(dummyThumb.h > 100 and dummyThumb.h < 400, "a taller view gets a proportionally taller thumb")
 
--- Update reminder: a group member on a newer version is proof (and beats age);
--- otherwise a version older than the age threshold flags. Pure, clock-injected.
-local vEpoch = time({ year = 2026, month = 7, day = 24, hour = 12 })
-ok(ns.updateStatusFor("2026.7.24", nil, vEpoch) == nil, "a fresh version with no newer peer is up to date")
-ok(ns.updateStatusFor("2026.7.24", nil, vEpoch + 10 * 86400) == nil, "ten days old does not flag yet")
-ok(ns.updateStatusFor("2026.7.24", nil, vEpoch + 50 * 86400).reason == "age", "a version 50 days old flags by age")
-local peer = ns.updateStatusFor("2026.7.24", "2026.9.1", vEpoch)
-ok(peer and peer.reason == "peer", "a newer peer version flags regardless of age")
-ok(ns.updateStatusFor("2026.9.1", "2026.7.24", vEpoch) == nil, "an older seen version is not treated as newer")
-
--- noteNewerVersion remembers only a strictly newer version (local is 2026.7.24
--- in the mock metadata), account-wide so it persists and keeps reminding.
-MythicPlusTimerState = {}
-ns.noteNewerVersion("2026.7.20")
-ok(MythicPlusTimerState.newerVersion == nil, "an older peer version is not remembered")
-ns.noteNewerVersion("2026.8.5")
-ok(MythicPlusTimerState.newerVersion == "2026.8.5", "a newer peer version is remembered")
-MythicPlusTimerState = nil
-
 ns.loadProfile("Default")
 ns.deleteProfile("Raid")
 local remaining = {}

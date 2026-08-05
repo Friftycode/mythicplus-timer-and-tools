@@ -79,15 +79,6 @@ A retail World of Warcraft addon with two pieces:
   Opening the test frames hides the Settings window and puts up a small "Close
   test frames" control; closing them (its button or Escape) brings Settings back.
 
-- **Update reminder**: an addon can't reach the internet to check for a new
-  release, so two offline signals stand in. Releases are date-stamped, so a
-  version more than 45 days old is flagged as likely behind; and party members
-  broadcast their version, so seeing a newer one is proof a new release exists.
-  That newer version is remembered account-wide and keeps reminding, across
-  sessions and after you leave the group, until this client catches up. The
-  reminder shows as a line across the top of the Settings window and an entry in
-  the minimap-button menu.
-
 Every number comes straight from the game client's own Challenge Mode /
 Scenario API. There is no bundled data, no download, and no network access:
 a WoW addon has none at runtime, and this one ships no data files at all.
@@ -253,7 +244,6 @@ One file per feature. The `.toc` is the load order and the dependency order:
 | `MythicPlusTimerandTools/Automation.lua` | Vendor, quest, and group-listing conveniences |
 | `MythicPlusTimerandTools/Social.lua` | Party from friends, queue confirm, invite on whisper, and blocking invites/duels |
 | `MythicPlusTimerandTools/KeystoneShare.lua` | Party key sharing and the "!keys" reply |
-| `MythicPlusTimerandTools/Update.lua` | Offline update reminder (version age and party-version broadcast) |
 | `MythicPlusTimerandTools/Minimap.lua` | Minimap button and its menu |
 | `MythicPlusTimerandTools/Media/minimap-icon.tga` | The minimap button and AddOns-list icon |
 | `MythicPlusTimerandTools/Options.lua` | Settings panel and `/mpt`, generated from the registries |
@@ -349,11 +339,6 @@ Kept here until the next tagged release picks it up.
   copies a chosen profile's settings into the active one, so a new profile can
   start from an existing look rather than the defaults. An inline, fading line
   confirms what was copied (no popup).
-- **Update reminder**: since an addon can't check the internet, it flags a likely
-  outdated version two ways: the date-stamped version being over 45 days old, or
-  a party member broadcasting a newer version (remembered account-wide in
-  `MythicPlusTimerState` and persisting until this client catches up). Shown as a
-  banner atop the Settings window and an entry in the minimap menu.
 - **Old notes kept across seasons**: dungeon and boss notes are never dropped for
   a dungeon rotating out of the season. They stay in the store and remain listed
   in the prepare-ahead editor, so they are still there if the dungeon returns.

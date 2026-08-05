@@ -729,39 +729,6 @@ local function buildSettings()
 
   panel.tabs, panel.pages = {}, {}
 
-  -- An update reminder across the top, above the tabs, when a newer version is
-  -- likely out. Reserved at build time (its status is known by login); the rest
-  -- of the layout shifts down by its height only when it is shown.
-  local status = (type(ns.updateStatus) == "function") and ns.updateStatus() or nil
-  local BANNER_H = status and 30 or 0
-  if status then
-    local box = CreateFrame("Frame", nil, panel, "BackdropTemplate")
-    box:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -4)
-    box:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -12, -4)
-    box:SetHeight(24)
-    -- A calm, theme-matching alert: a warm dark backdrop with a soft gold rule,
-    -- not an alarming red. Gold text reads as a notice, not a warning.
-    if box.SetBackdrop then
-      box:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1, insets = { left = 1, right = 1, top = 1, bottom = 1 },
-      })
-      box:SetBackdropColor(0.16, 0.13, 0.08, 0.94)
-      box:SetBackdropBorderColor(GOLD_RGB[1], GOLD_RGB[2], GOLD_RGB[3], 0.45)
-    else
-      local bg = box:CreateTexture(nil, "BACKGROUND")
-      bg:SetAllPoints()
-      bg:SetColorTexture(0.16, 0.13, 0.08, 0.94)
-    end
-    box.text = box:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    box.text:SetPoint("LEFT", box, "LEFT", 10, 0)
-    box.text:SetPoint("RIGHT", box, "RIGHT", -10, 0)
-    box.text:SetJustifyH("LEFT")
-    box.text:SetText(GOLD .. status.message .. ENDC)
-    panel.banner = box
-  end
-
   panel.desc = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   panel.desc:SetJustifyH("LEFT")
 
@@ -787,7 +754,7 @@ local function buildSettings()
 
   -- The tab strip wraps to more rows when the next tab would run past the panel,
   -- so a growing set of features never pushes tabs off the right edge.
-  local rowX, rowY, rows = 16, STRIP_Y - BANNER_H, 1
+  local rowX, rowY, rows = 16, STRIP_Y, 1
   for _, g in ipairs(tabOrder) do
     local tab = tabButton(panel, g)
     local w = tab:GetWidth()
@@ -802,9 +769,8 @@ local function buildSettings()
     rowX = rowX + w + TAB_GAP
   end
 
-  -- Everything below the strip shifts down by however many rows it grew to, plus
-  -- the update banner's height when one is shown.
-  local stripY = STRIP_Y - BANNER_H - (rows - 1) * (TAB_H + TAB_GAP) - TAB_H
+  -- Everything below the strip shifts down by however many rows it grew to.
+  local stripY = STRIP_Y - (rows - 1) * (TAB_H + TAB_GAP) - TAB_H
   local strip = panel:CreateTexture(nil, "ARTWORK")
   strip:SetHeight(1)
   paint(strip, { 1, 1, 1, 0.25 })
