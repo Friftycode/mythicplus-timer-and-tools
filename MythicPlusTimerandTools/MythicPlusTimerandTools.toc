@@ -2,7 +2,7 @@
 ## Title: Mythic+ Timer and Tools
 ## Notes: Movable Mythic+ run overlay: time remaining, the +2/+3 upgrade windows, enemy forces, bosses, and deaths. Plus your guild's keys this week.
 ## Author: Friftycode
-## Version: 2026.8.16
+## Version: 2026.8.18
 ## SavedVariables: MythicPlusTimerConfig, MythicPlusTimerRun, MythicPlusTimerNotes
 ## X-Curse-Project-ID: 1623279
 ## IconTexture: Interface\AddOns\MythicPlusTimerandTools\Media\minimap-icon.tga
