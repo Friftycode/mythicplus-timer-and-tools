@@ -71,19 +71,56 @@ local function npLoadJournal()
   if C_AddOns and C_AddOns.LoadAddOn then pcall(C_AddOns.LoadAddOn, "Blizzard_EncounterJournal") end
 end
 
+-- The journal holds one shared selection, a tier plus an instance, that the
+-- player's own Adventure Guide reads from. Anything we look up has to put it
+-- back, or their open guide jumps to whatever we were asking about.
+local function npSaveJournal()
+  local tier, inst
+  if EJ_GetCurrentTier then local ok, v = pcall(EJ_GetCurrentTier); if ok then tier = v end end
+  if EJ_GetCurrentInstance then local ok, v = pcall(EJ_GetCurrentInstance); if ok then inst = v end end
+  return tier, inst
+end
+
+local function npRestoreJournal(tier, inst)
+  if type(tier) == "number" and tier > 0 and EJ_SelectTier then pcall(EJ_SelectTier, tier) end
+  if type(inst) == "number" and inst > 0 and EJ_SelectInstance then pcall(EJ_SelectInstance, inst) end
+end
+
 local npBossCache = {}
+
+local function npReadBosses(journalID, list)
+  for i = 1, 20 do
+    local ok, name, _, _, _, _, _, dungeonEncounterID = pcall(EJ_GetEncounterInfoByIndex, i, journalID)
+    if not (ok and type(name) == "string" and name ~= "") then break end
+    list[#list + 1] = { key = "b" .. tostring(dungeonEncounterID or i), name = name }
+  end
+  return list
+end
+
 local function npBossesFor(journalID)
   if not journalID then return {} end
   if npBossCache[journalID] then return npBossCache[journalID] end
   local list = {}
   if not (EJ_GetEncounterInfoByIndex and EJ_SelectInstance) then return list end
   npLoadJournal()
+  local tier, inst = npSaveJournal()
   pcall(EJ_SelectInstance, journalID)
-  for i = 1, 20 do
-    local ok, name, _, _, _, _, _, dungeonEncounterID = pcall(EJ_GetEncounterInfoByIndex, i, journalID)
-    if not (ok and type(name) == "string" and name ~= "") then break end
-    list[#list + 1] = { key = "b" .. tostring(dungeonEncounterID or i), name = name }
+  npReadBosses(journalID, list)
+  -- A dungeon only reports its encounters while its own tier is the selected
+  -- one, and that selection is shared: our own dungeon-list scan leaves it on
+  -- the previous expansion, as does the player browsing the Adventure Guide.
+  if #list == 0 and EJ_GetNumTiers and EJ_SelectTier then
+    local okN, numTiers = pcall(EJ_GetNumTiers)
+    if okN and type(numTiers) == "number" then
+      for t = numTiers, 1, -1 do
+        pcall(EJ_SelectTier, t)
+        pcall(EJ_SelectInstance, journalID)
+        npReadBosses(journalID, list)
+        if #list > 0 then break end
+      end
+    end
   end
+  npRestoreJournal(tier, inst)
   if #list > 0 then npBossCache[journalID] = list end
   return list
 end
@@ -93,8 +130,11 @@ end
 local function npResolveDungeonName(instID)
   if not (EJ_SelectInstance and EJ_GetInstanceInfo) then return nil end
   npLoadJournal()
-  if not pcall(EJ_SelectInstance, instID) then return nil end
-  local ok, name = pcall(EJ_GetInstanceInfo)
+  local tier, inst = npSaveJournal()
+  local selected = pcall(EJ_SelectInstance, instID)
+  local ok, name = false, nil
+  if selected then ok, name = pcall(EJ_GetInstanceInfo) end
+  npRestoreJournal(tier, inst)
   if ok and type(name) == "string" and name ~= "" then return name end
   return nil
 end
@@ -109,6 +149,7 @@ local function npScanTiers()
   npLoadJournal()
   local ok, numTiers = pcall(EJ_GetNumTiers)
   if not (ok and type(numTiers) == "number" and numTiers > 0) then return out end
+  local savedTier, savedInst = npSaveJournal()
   local seen = {}
   for tier = numTiers, math.max(1, numTiers - 1), -1 do
     pcall(EJ_SelectTier, tier)
@@ -121,6 +162,7 @@ local function npScanTiers()
       end
     end
   end
+  npRestoreJournal(savedTier, savedInst)
   return out
 end
 
@@ -173,8 +215,14 @@ local function npCurrentDungeonKey()
       if okI and type(instID) == "number" and instID > 0 then return instID end
     end
   end
+  -- GetInstanceInfo's id is a map id, a different numbering to the journal's,
+  -- so only take it when the journal actually knows it as an instance.
   local ok, _, _, _, _, _, _, _, instanceID = pcall(GetInstanceInfo)
-  return (ok and type(instanceID) == "number" and instanceID > 0) and instanceID or nil
+  if ok and type(instanceID) == "number" and instanceID > 0
+    and npResolveDungeonName(instanceID) then
+    return instanceID
+  end
+  return nil
 end
 
 local function npKeyActiveNow()
@@ -798,6 +846,29 @@ local function npApply()
   f:Show()
 end
 
+-- Zone-in is the worst moment to ask the journal anything: the map api has not
+-- settled, and Blizzard_EncounterJournal is load-on-demand, so the boss tabs can
+-- be a good few seconds behind the window. Keep asking until they arrive rather
+-- than giving up on a fixed schedule and leaving a lone Dungeon tab all run.
+local npFillTicket = 0
+local function npFillBosses(ticket, tries)
+  if ticket ~= npFillTicket then return end
+  pcall(npApply)
+  local f = npFrame
+  for _, s in ipairs((f and f.sections) or {}) do
+    if s.key ~= "dungeon" then return end
+  end
+  if tries < 15 and npInDungeon() then
+    C_Timer.After(2, function() npFillBosses(ticket, tries + 1) end)
+  end
+end
+
+local function npStartFill()
+  npFillTicket = npFillTicket + 1
+  local ticket = npFillTicket
+  C_Timer.After(1, function() npFillBosses(ticket, 1) end)
+end
+
 local function npRefreshEditable()
   if npFrame and npFrame:IsShown() then
     if npFrame.editing and not npCanEdit(npSection) then npFrame.commitEdit() end
@@ -907,18 +978,28 @@ npEvents:SetScript("OnEvent", function(_, event, arg1)
     npCurrentID = nil
   end
   pcall(npApply)
-  if event == "PLAYER_ENTERING_WORLD" then
-    -- Re-apply after the instance and journal APIs settle, so the boss tabs
-    -- appear on entering the dungeon and not only once a key has started.
-    C_Timer.After(1, function() pcall(npApply) end)
-    C_Timer.After(3, function() pcall(npApply) end)
-    C_Timer.After(6, function() pcall(npApply) end)
-  end
+  if event == "PLAYER_ENTERING_WORLD" then npStartFill() end
 end)
 
-ns.onOptionChanged("notepad", function() pcall(npApply) end)
-ns.onOptionChanged("notepadmode", function() pcall(npApply) end)
+ns.onOptionChanged("notepad", function() pcall(npApply); npStartFill() end)
+ns.onOptionChanged("notepadmode", function() pcall(npApply); npStartFill() end)
 ns.onOptionChanged("notepadlocked", function() if npFrame then npApplyLock(npFrame) end end)
+
+-- Hidden (no help text, so it stays out of /mpt): report what the journal gives
+-- us for the dungeon you are standing in, for when the boss tabs come up empty.
+ns.command("notedebug", nil, function()
+  local key = npCurrentDungeonKey()
+  local okM, uiMap = false, nil
+  if C_Map and C_Map.GetBestMapForUnit then okM, uiMap = pcall(C_Map.GetBestMapForUnit, "player") end
+  local okT, tiers = pcall(EJ_GetNumTiers)
+  ns.print("map " .. tostring(okM and uiMap) .. ", journal id " .. tostring(key)
+    .. " (" .. tostring(key and npResolveDungeonName(key)) .. "), tiers "
+    .. tostring(okT and tiers) .. ", journal addon "
+    .. tostring(C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("Blizzard_EncounterJournal")))
+  local bosses = npBossesFor(key)
+  ns.print("bosses: " .. (#bosses > 0 and #bosses or "none"))
+  for _, b in ipairs(bosses) do ns.print("  " .. b.name .. " (" .. b.key .. ")") end
+end)
 
 ns.previewFrame("instance notepad", function()
   local f = ensureNpFrame()

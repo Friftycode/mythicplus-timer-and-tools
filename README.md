@@ -271,10 +271,15 @@ Kept here until the next tagged release picks it up.
   left after a death-heavy run has already blown the timer. The frozen completion
   screen is unchanged (it already uses Blizzard's final time).
 
-- **Boss note tabs show on entering the dungeon**: the per-boss tabs used to
-  appear only once the keystone started, because the map and journal data isn't
-  ready the instant you zone in. The note now re-checks for a few seconds after
-  entering, so its dungeon and boss tabs are there straight away.
+- **Boss note tabs show on entering the dungeon**: the per-boss tabs could be
+  missing for a whole run, leaving just the Dungeon tab. The Adventure Guide has
+  a single shared selection of which expansion it is looking at, and a dungeon
+  only lists its bosses while its own expansion is the selected one, so building
+  the dungeon list (or you browsing the guide yourself) could leave the note
+  looking in the wrong place. The note now finds a dungeon's bosses whatever the
+  guide is set to, puts the guide's selection back as it found it, and keeps
+  re-checking after you zone in until the tabs are there. Boss names are still
+  read from the Adventure Guide, so new dungeons and seasons need no update.
 
 - **Reworked "When to show it" for the note**: three clearer choices - "Always"
   (shown everywhere the note is on, in or out of a dungeon), "Just inside dungeon"
