@@ -264,6 +264,15 @@ Kept here until the next tagged release picks it up.
 
 ### Unreleased
 
+- **Inspecting other players works again**: the join popup's item level column
+  listens for every inspect the client answers, and it used to throw the result
+  away and re-point the client at a party member even when the inspect was your
+  own right-click one. Blizzard's inspect window was left with nothing to show,
+  through a reload, for as long as the addon was loaded. It now reads and clears
+  only the inspects it asked for, asks for none at all while your own inspect
+  window is open, and forgets a request still in flight when you leave the group
+  so a stale one cannot block every later inspect.
+
 - **Timer counts the death penalty**: deaths add to the scored clock (Challenger's
   Burden), so the big countdown, the time bar, and the +2/+3 windows now work off
   run time plus the death penalty instead of wall time alone. The clock now runs

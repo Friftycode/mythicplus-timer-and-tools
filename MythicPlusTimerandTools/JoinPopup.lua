@@ -77,6 +77,13 @@ end
 local function jpRequestInspect()
   if jpInspectGUID or type(NotifyInspect) ~= "function" then return end
   if InCombatLockdown and InCombatLockdown() then return end
+  -- The client holds one inspect target. While the player has their own inspect
+  -- window open, asking for ours would retarget it under them.
+  local insp = _G.InspectFrame
+  if insp and type(insp.IsShown) == "function" then
+    local ok, shown = pcall(insp.IsShown, insp)
+    if ok and shown then return end
+  end
   for _, unit in ipairs(JP_UNITS) do
     if UnitExists(unit) and not jpIsSelf(unit) then
       local guid = jpGUID(unit)
@@ -93,9 +100,15 @@ local function jpRequestInspect()
 end
 
 -- Returns true when this taught us something, so the caller knows to redraw.
+-- INSPECT_READY fires for every inspect on the client, including the player's
+-- own right-click one. Only the reply to our own request is ours to read and to
+-- clear: clearing anyone else's leaves Blizzard's inspect window with nothing to
+-- show, which reads in game as "this addon broke inspect".
 local function jpInspectReady(guid)
+  if not guid or guid ~= jpInspectGUID then return false end
+  jpInspectGUID = nil
   local learned = false
-  if guid and C_PaperDollInfo and C_PaperDollInfo.GetInspectItemLevel then
+  if C_PaperDollInfo and C_PaperDollInfo.GetInspectItemLevel then
     for _, unit in ipairs(JP_UNITS) do
       if UnitExists(unit) and jpGUID(unit) == guid then
         local ok, n = pcall(C_PaperDollInfo.GetInspectItemLevel, unit)
@@ -107,7 +120,6 @@ local function jpInspectReady(guid)
       end
     end
   end
-  if jpInspectGUID == guid then jpInspectGUID = nil end
   pcall(ClearInspectPlayer)
   jpRequestInspect()
   return learned
@@ -386,6 +398,9 @@ joinEvents:SetScript("OnEvent", function(_, event, arg1)
     local learned = jpInspectReady(arg1)
     if learned and jpFrame and jpFrame:IsShown() then jpRedrawParty(jpFrame) end
   elseif event == "GROUP_LEFT" then
+    -- A request still in flight will never be answered now, and a stale guid
+    -- here would block every later one.
+    jpInspectGUID = nil
     -- The group is gone, so the popup describing it is stale.
     if jpFrame and not (InCombatLockdown and InCombatLockdown()) then pcall(jpFrame.Hide, jpFrame) end
   elseif event == "PLAYER_REGEN_ENABLED" then

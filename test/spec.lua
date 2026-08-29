@@ -557,6 +557,23 @@ has(Mock.rendered(popup()), "502", "and appears once the client answers")
 Mock.units.party1.ilvl = nil
 Mock.fire("GROUP_LEFT")
 
+-- INSPECT_READY also fires for the player's own right-click inspect. Answering
+-- one we never asked for used to clear the client's inspect, which emptied
+-- Blizzard's inspect window for as long as the addon was loaded.
+Mock.fire("LFG_LIST_JOINED_GROUP", 77)
+Mock.state.inspected = "SOMEONE-ELSE"
+Mock.fire("INSPECT_READY", "SOMEONE-ELSE")
+ok(Mock.state.inspected == "SOMEONE-ELSE", "an inspect the addon did not ask for is left alone")
+Mock.fire("GROUP_LEFT")
+
+-- Nor do we retarget the client while that window is open.
+InspectFrame = { IsShown = function() return true end }
+Mock.state.inspected = nil
+Mock.fire("LFG_LIST_JOINED_GROUP", 77)
+ok(Mock.state.inspected == nil, "no inspect is requested while the player's own inspect window is open")
+InspectFrame = nil
+Mock.fire("GROUP_LEFT")
+
 -- The leader's score rides along on the listing, so it needs no inspect.
 Mock.units.party3 = { name = "Keypusher", class = "WARRIOR", guid = "P-4" }
 Mock.fire("LFG_LIST_JOINED_GROUP", 77)
