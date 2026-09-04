@@ -11,10 +11,10 @@ local cfg, mptPrint = ns.cfg, ns.print
 -- locale, so matching the LINK finds the key without an item id that a future
 -- patch can retire out from under us.
 local KEYSTONE_LINK_TAG = "Hkeystone"
--- The receptacle event and the interaction event both fire for one interaction,
--- and the window is still opening when the first lands. A short delay collapses
--- them into a single insert and lets the frame settle before an item lands on
--- the cursor.
+-- The receptacle event and the frame's OnShow both fire for one interaction, and
+-- the window is still opening when the first lands. A short delay collapses them
+-- into a single insert and lets the frame settle before an item lands on the
+-- cursor.
 local KEY_INSERT_DELAY = 0.35
 local keyInsertPending = false
 
@@ -95,19 +95,20 @@ local function autoSlotKeystone(verbose)
   end)
 end
 
--- Two events (plus a frame hook below) cover interacting with the Font of Power;
--- keyInsertPending collapses ones that land together into a single insert.
+-- The receptacle event (plus the frame hook below) covers interacting with the
+-- Font of Power; keyInsertPending collapses ones that land together into a
+-- single insert.
+--
+-- PLAYER_INTERACTION_MANAGER_FRAME_SHOW is deliberately not used. It fires for
+-- every interactable frame, and Enum.PlayerInteractionType has no member for the
+-- Font of Power, so nothing in its payload can single the font out. Listening to
+-- it meant a profession table, mailbox, bank or vendor put the key on the cursor
+-- and asked the server to slot it, which answered "That keystone is for a
+-- different dungeon".
 local keyEvents = CreateFrame("Frame")
--- pcall each: RegisterEvent throws on an event name a given client build lacks.
-for _, ev in ipairs({ "CHALLENGE_MODE_KEYSTONE_RECEPTABLE_OPEN", "PLAYER_INTERACTION_MANAGER_FRAME_SHOW" }) do
-  pcall(keyEvents.RegisterEvent, keyEvents, ev)
-end
-keyEvents:SetScript("OnEvent", function(_, event, arg1)
-  if event == "PLAYER_INTERACTION_MANAGER_FRAME_SHOW" then
-    -- That event covers every interactable frame; only the keystone one matters.
-    local want = Enum and Enum.PlayerInteractionType and Enum.PlayerInteractionType.ChallengeMode
-    if want and arg1 ~= want then return end
-  end
+-- pcall: RegisterEvent throws on an event name a given client build lacks.
+pcall(keyEvents.RegisterEvent, keyEvents, "CHALLENGE_MODE_KEYSTONE_RECEPTABLE_OPEN")
+keyEvents:SetScript("OnEvent", function()
   pcall(autoSlotKeystone)
 end)
 

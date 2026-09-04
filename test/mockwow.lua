@@ -663,7 +663,10 @@ MenuUtil = {
 
 Enum = {
   StartTimerType = { ChallengeModeCountdown = 1 },
-  PlayerInteractionType = { ChallengeMode = 53 },
+  -- Real values from the live client. There is deliberately no ChallengeMode
+  -- member: the Font of Power has no interaction type, and inventing one here
+  -- once hid a bug where every interactable frame triggered the auto-slot.
+  PlayerInteractionType = { Banker = 8, MailInfo = 17, Professions = 59 },
   SpellBookItemType = { Spell = "SPELL", Flyout = "FLYOUT" },
   SpellBookSpellBank = { Player = 0 },
   LFGEntryGeneralPlaystyle = { None = 0, Learning = 1, FunRelaxed = 2, FunSerious = 3, Expert = 4 },

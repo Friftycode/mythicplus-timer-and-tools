@@ -376,19 +376,25 @@ openFont()
 ok(Mock.slotted == false, "nothing is slotted while the option is off")
 MythicPlusTimerNamespace.setCfg("autoslotkey", true)
 
--- Both events firing for one interaction must still insert exactly once.
+-- Both triggers firing for one interaction must still insert exactly once.
 Mock.slotted, Mock.cursor, Mock.inserts = false, nil, 0
 Mock.fire("CHALLENGE_MODE_KEYSTONE_RECEPTABLE_OPEN")
-Mock.fire("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", Enum.PlayerInteractionType.ChallengeMode)
 Mock.showFrame(ChallengesKeystoneFrame)
 Mock.advance(1)
-ok(Mock.inserts == 1, "three triggers for one interaction insert once, got " .. Mock.inserts)
+ok(Mock.inserts == 1, "two triggers for one interaction insert once, got " .. Mock.inserts)
 
--- A different interactable frame is not the Font of Power.
-Mock.slotted, Mock.cursor, Mock.inserts = false, nil, 0
-Mock.fire("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", 99)
-Mock.advance(1)
-ok(Mock.inserts == 0, "an unrelated interaction frame is ignored")
+-- Interacting with anything that is not the Font of Power must not touch the
+-- key. PLAYER_INTERACTION_MANAGER_FRAME_SHOW fires for every interactable frame
+-- and cannot identify the font, so the auto-slot must ignore that event outright.
+-- Reacting to it put the key on the cursor at a profession table and got the
+-- player "That keystone is for a different dungeon" from the server.
+for _, kind in ipairs({ "Professions", "Banker", "MailInfo" }) do
+  Mock.slotted, Mock.cursor, Mock.inserts = false, nil, 0
+  Mock.fire("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", Enum.PlayerInteractionType[kind])
+  Mock.advance(1)
+  ok(Mock.inserts == 0, "interacting with " .. kind .. " does not slot the key")
+  ok(Mock.cursor == nil, "interacting with " .. kind .. " leaves the cursor empty")
+end
 
 -- There is deliberately no key-matches-this-dungeon guard: the two ids that
 -- would answer it are not documented to share an id space, and comparing them

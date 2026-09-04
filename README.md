@@ -264,6 +264,16 @@ Kept here until the next tagged release picks it up.
 
 ### Unreleased
 
+- **The auto-slot no longer reaches for your key away from the font**: opening a
+  profession table, a mailbox, a bank, or a vendor put your keystone on the
+  cursor and asked the server to slot it, which answered "That keystone is for a
+  different dungeon". It listened for the interaction-manager event that fires
+  for every interactable frame, and `Enum.PlayerInteractionType` has no member
+  for the Font of Power, so nothing in that event could tell the font apart from
+  anything else you click. It now reacts only to the keystone receptacle opening
+  and to Blizzard's keystone frame appearing, both of which mean the font and
+  nothing else.
+
 - **Inspecting other players works again**: the join popup's item level column
   listens for every inspect the client answers, and it used to throw the result
   away and re-point the client at a party member even when the inspect was your
